@@ -1,0 +1,226 @@
+---
+title: "Finance Quantitative"
+subtitle: |
+  | Gestion Obligataire
+  | Solution
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: true
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{float}
+  - \usepackage{eurosym}
+  - \usepackage{tikz}
+  - \usetikzlibrary{matrix}
+  - \usepgflibrary{shapes.misc}
+  - \usetikzlibrary{arrows,shadows}
+bibliography: ../library.bib
+csl: ../apa.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+```{r load-libraries, include=FALSE, echo=FALSE}
+library(nleqslv)
+library(kableExtra)
+library(lubridate)
+library(BondValuation)
+library(lpSolve)
+
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+# Couverture d'un passif obligataire
+
+L'objet de cette partir est de construire un modèle de gestion obligataire qui combine les méthodes d'adossement flux à flux et d'immunisation.
+
+La méthode d'adossement flux à flux est adaptée aux échéances court-terme, car elle évite de faire des transactions trop nombreuses. Par contre, elle manque de flexibilité, et se révèle être une solution chère. Pour un horizon plus lointain, on lui préfère donc l'immunisation.
+
+## Données
+
+Les données sont simulées pour les besoins du TP.
+
+### Obligations
+
+```{r, echo=T}
+df.o <- read.csv("../GP/data/obligations.csv",
+                           colClasses=c("character", "character", NA))
+df.o$dtE <- as.Date(df.o$dtE, format("%m/%d/%Y"))
+df.o$dtM <- as.Date(df.o$dtM, format("%m/%d/%Y"))
+df.o$Nom <- sapply(seq_along(df.o$dtE), function(x) paste('Bond-',x, sep=''))
+nb.bonds <- nrow(df.o)
+kable(df.o[1:10,],
+      col.names=c("Dt Emission", "Dt Maturité", "Coupon (%)", "Nom"),
+      format="latex", booktabs=T)%>%
+  kable_styling(position="center")
+
+```
+
+### Courbe des taux actuariels
+
+```{r, echo=T}
+dt.mat <- seq(ymd('2021-01-01'), ymd('2040-01-01'), by="year")
+tx <- 1 + log(seq_along(dt.mat))
+df.cdt <- data.frame(mat=dt.mat, tx=tx)
+plot(dt.mat, tx, type='l', lwd=2, col='red',
+     main='Courbe des taux actuariels',
+     xlab="Maturité", ylab="taux")
+```
+
+### Calculs préliminaires
+
++ Ecrire une fonction qui permet d'interpoler la courbe de taux pour une date de maturité donnée.
++ Choisir une obligation de la liste, interpoler le rendement actuariel et calculer le prix "pied de coupon", le coupon couru, le prix "avec coupon couru", et les indicateurs de risque. Utiliser le paquet "BondValuation" et la convention AFB ACT/ACT pour les décomptes de jours.
+
+
+## Partie 1: Immunisation
+
+Soit un passif de 10,000,000\euro\ payable le 2/1/2025. Construisez un portefeuille de deux obligations ayant, au 17/3/2021, la même valeur et la même PV01 que le passif. Optimisez le rendement moyen du portefeuille ainsi construit.
+
+### Calcul de prix et indicateurs de risque des obligations
+
+### Prix et PV01 du passif
+
+
+### Programme d'immunisation: maximiser le rendement du portefeuille.
+
+### Vérification
+
+
+## Partie 2: Adossement flux à flux et immunisation
+
+On considère maintenant un passif composé de plusieurs flux, comme indiqué dans le tableau ci-dessous:
+
+```{r}
+df.flow <- data.frame(dt=as.Date(c("2021-10-01",
+                     "2022-04-01",
+                     "2022-10-01",
+                     "2023-04-01",
+                     "2023-10-01",
+                     "2024-04-01",
+                     "2024-10-01")),
+vx=as.numeric(c(rep(1000000,6), 10000000)))
+
+kable(df.flow, format="latex", booktabs=T,col.names = c("Date", "Montant"), format.args=list(big.mark=",", scientific=F, booktabs=T),
+      caption="Echéancier du passif à financer")%>%
+  kable_styling(position="center", latex_options="HOLD_position")
+
+```
+
+Construire un portefeuille de rendement maximum tel que:
+
++ les 4 premiers flux de passif sont adossés
++ au 01/04/2023 (date d'immunisation), la PV et PV01 de l'actif et du passif sont égales.
+
+On suppose que la courbe des taux au 01/04/2023 sera la même qu'au 17/03/2021.
+
+Les étapes du calcul sont les suivantes:
+
+### Prix et PV01 des obligations à la date d'immunisation
+
+### Prix et PV01 du passif à la date d'immunisation
+
+### Résolution du programme linéaire
+
+# Valorisation d'une option sur obligation avec le modèle de Black-Derman-Toy
+
+On considère le modèle de Black, Derman et Toy décrit dans la note de cours.
+
+
+```{r jr-1, echo=FALSE, engine='tikz', out.width='60%', fig.ext=if (knitr:::is_latex_output()) 'pdf' else 'png', fig.cap="Black-Derman-Toy short rate tree"}
+
+\begin{tikzpicture}
+  \matrix (tree) [matrix of nodes,column sep=1.5cm]
+          {
+                  &        &         & $r_{uuu}$ \\
+                  &        & $r_{uu}$   & \\
+                  & $r_u$ &         & $r_{uud}$ \\
+             $r$ &        & $r_{ud}$   & \\
+                  & $r_d$ &        & $r_{udd}$      \\
+                  &       & $r_{dd}$ &            \\
+                  &       &        & $r_{ddd}$      \\
+            };
+          \draw[->] (tree-4-1)--(tree-3-2);
+          \draw[->] (tree-4-1)--(tree-5-2);
+          \draw[->] (tree-3-2)--(tree-2-3);
+          \draw[->] (tree-3-2)--(tree-4-3);
+          \draw[->] (tree-5-2)--(tree-4-3);
+          \draw[->] (tree-5-2)--(tree-6-3);
+          \draw[->] (tree-2-3)--(tree-1-4);
+          \draw[->] (tree-2-3)--(tree-3-4);
+          \draw[->] (tree-4-3)--(tree-3-4);
+          \draw[->] (tree-4-3)--(tree-5-4);
+          \draw[->] (tree-6-3)--(tree-5-4);
+          \draw[->] (tree-6-3)--(tree-7-4);
+         \end{tikzpicture}
+```
+
+
+L'objectif de cette partie est de calibrer le modèle à une courbe zero-coupon et une courbe de volatilité du taux zero-coupon afin de valoriser une option sur obligation. 
+
+
+```{r, echo=FALSE}
+options(knitr.kable.NA = "")
+data.bdt <- data.frame(mat = seq(5), z=c(10,11,12,12.5,13), b=c(NA, 19,18,17.,16.))
+kable(data.bdt, format="latex", booktabs=TRUE,escape=FALSE, col.names = c("Maturity", "$z(t)$", "$\\beta(t)$"))
+```
+
+## Construction d'un arbre BDT
+
+```{r, echo=TRUE}
+z <- data.bdt$z/100
+beta <- data.bdt$b/100
+```
+
+Fonctions d'interpolation pour la courbe zero-coupon et la courbe de volatilité. On ajoute un taux court à la courbe zero-coupon pour permettre une interpolation robuste.
+
+```{r, echo=TRUE}
+zc.curve <- splinefun(seq(0,5), c(.09, z))
+beta[1] <- .2
+vol.curve <- splinefun(seq(0,5), c(.21, beta))
+
+df <- function(r) {
+  1/(1+r)
+}
+```
+
+
+```{r, echo=FALSE}
+t <- seq(0,5,.1)
+zc.int <- zc.curve(t)
+vol.int <- vol.curve(t)
+twoord.plot(lx=t, ly=zc.int, rx=t, ry=vol.int, xlab="Time (Yr)",
+            type="l", ylab="Zero-coupon yield", rylab="Volatility")
+```
+
+## Questions
+
+1. Calibrage de l'arbre: généraliser la méthode de calibration vue en cours pour pouvoir construire un arbre de $n$ pas, et d'incrément $\Delta t$.
+
+2. A partir de l'article de Boyle (2000), utiliser les prix d'Arrow-Debreu pour optimiser les calculs. 
+
+3. Construire un arbre de maturité 5 ans, par pas de temps de 1 mois. 
+
+4. Utiliser cet arbre pour valoriser un call de strike 79, de maturité 1 an, sur une obligation de maturité 5 ans et de coupon 5%.
+

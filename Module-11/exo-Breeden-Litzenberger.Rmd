@@ -1,0 +1,100 @@
+---
+title: "Finance Quantitative"
+subtitle: "Exo: Formule de Breeden-Litzenberger"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{float}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+```{r load-libraries, include=FALSE, echo=FALSE}
+library(kableExtra)
+library(lubridate)
+library(BondValuation)
+library(lpSolve)
+library(fOptions)
+
+
+get.src.folder <- function() {
+path.expand("../GP/src")
+}
+
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+On se propose de calculer la distribution empirique de $S_T$ à partir de la volatilité implicite des options.
+
+```{r}
+sigma <- .2
+S <- 100
+r <- .0
+b <- 0.0
+T <- 1
+```
+
+La courbe de volatilité est donnée par un polynome du second degré. La volatilité de "Black-Scholes" est la volatilité à l'argent, réputée indépendante du strike.
+
+```{r, echo=TRUE}
+## quadratic smile coefficients
+a1 <- -.40/10
+a2 <- .5/10
+
+## BS volatility function
+bsVol <- function(K) {
+  rep(sigma, length(K))
+}
+
+## Volatility with smile
+smileVol <- function(K) {
+  sigma + a1*log(K/S) + a2*log(K/S)^2
+}
+```
+
+## Smile de volatilité
+
+```{r, echo=TRUE}
+KRange <- seq(80, 120, by=2)
+vol.smile <- sapply(KRange, smileVol)
+plot(KRange, vol.smile, type="l", col="red", lwd=2)
+```
+
+
+```{r, echo=TRUE}
+# Call avec smile de volatilité
+call.sm <- function(K) {
+  tmp <- GBSOption(TypeFlag="c", S, X=K,Time=T,
+                   r=r, b=b, sigma=smileVol(K))
+  tmp@price
+}
+# test
+print(paste("Call 90: ", round(call.sm(90),3)))
+```
+
+## Densité de $S_T$
+
+Calculer la densité $p(S_T)$ en utilisant la formule de Breeden-Litzenberger.
+
+## Valorisation de call digitaux strike=140
+
+Valoriser un call digital en dehors de l'argent ($K=105$), en utilisant la distribution lognormale (Black-Scholes) et la distribution implicite dérivée du smile.

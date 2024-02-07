@@ -1,0 +1,289 @@
+---
+title: "Modèles Multi-Facteurs"
+author: "P. Hénaff"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  beamer_presentation:
+    colortheme: dolphin
+    theme: Montpellier
+  slidy_presentation: default
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{graphicx}
+  - \usepackage{subfig}
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage{wrapfig}
+  - \usepackage{float}
+  - \usepackage{colortbl}
+  - \usepackage{pdflscape}
+  - \usepackage{tabu}
+  - \usepackage{threeparttable}
+  - \usepackage{threeparttablex}
+  - \usepackage[normalem]{ulem}
+  - \usepackage{makecell}
+  - \usepackage{xcolor}
+
+
+bibliography: ../library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+```{r load-libraries, include=FALSE, echo=FALSE}
+library(quantmod)
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(SuppDists)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(quadprog)
+library(knitr)
+library(kableExtra)
+library(latex2exp)
+library(FFdownload)
+#library(fPortfolio)
+#library(BLCOP)
+library(mnormt)
+#library(riskParityPortfolio)
+
+
+
+src.path <- function(filename) {
+  file.path(path.expand("../GP/src"), filename)
+}
+
+data.path <- function(filename) {
+  file.path(path.expand("../GP/data"), filename)
+}
+
+graphics.path <- function(filename) {
+  file.path(path.expand("../Graphics"), filename)
+}
+
+source(src.path('utils.R'))
+source(src.path('FileUtils.R'))
+```
+
+## Droite de Marché des Capitaux
+
+```{r cml, echo=FALSE, out.width = '100%', fig.cap="Droite de Marché des Capitaux"}
+knitr::include_graphics(graphics.path("capital-market-line.pdf"))
+```
+
+## MEDAF: Droite de Marché des Titres
+
+```{r, capm, echo=FALSE, fig.cap="Droite de Marché des Titres", fig.height=5}
+x <- runif(20, .5, 2)
+y <- .02 + .03*x + rnorm(20,0,.0025)
+plot(x,y, xlim=c(0, 2.5), ylim=c(0, .1), bty="no", pch=1, col="blue", xlab=expression(beta),
+     ylab=expression(E(r)))
+abline(a=.02, b=.03, col="red")
+```
+
+## APT (0)
+
+Hypothèses de l'APT
+
+
++ Le rendement des actifs risqués est une fonction linéaire d'un nombre limité de facteurs
+\begin{align}
+\label{eq:apt-1}
+R_{it} = E_i + \sum_{k=1}^K \beta_{ik} F_{kt} + \epsilon_{it}
+\end{align}
+
++ Il y a assez de titres sur le marché pour créer des portefeuilles où le risque spécifique a été diversifié
++ Il n'y a pas d'opportunités d'arbitrage
+
+## APT: Droite de marché des titres pour un facteur
+::: columns
+
+:::: column
+```{r, apt-1, echo=FALSE, fig.cap="Portefeuilles diversifiés"}
+x <- runif(20, -2, 2)
+y <- .02 + .03*x + rnorm(20,0,.0015)
+plot(x,y, xlim=c(-2.5, 2.5), ylim=c(-.1, .1), bty="no", pch=1, col="blue", xlab=expression(F),
+     ylab=expression(E(r)))
+abline(a=.02, b=.03, col="red")
+```
+::::
+
+:::: column
+```{r, apt-2, echo=FALSE, fig.cap="Actions Simples"}
+x <- runif(20, -2, 2)
+y <- .02 + .03*x + rnorm(20,0,.01)
+plot(x,y, xlim=c(-2.5, 2.5), ylim=c(-.1, .1), bty="no", pch=1, col="blue", xlab=expression(F),
+     ylab=expression(E(r)))
+abline(a=.02, b=.03, col="red")
+```
+::::
+
+:::
+
+## APT: Opportunité d'arbitrage sur un facteur
+
+```{r, apt-3, echo=FALSE, fig.cap="Opportunité d'arbitrage"}
+x <- runif(20, -2, 2)
+y <- .02 + .03*x + rnorm(20,0,.001)
+plot(x,y, xlim=c(-2.5, 2.5), ylim=c(-.1, .1), bty="no", pch=1, col="blue", xlab=expression(F), ylab=expression(E(r)))
+z <- .0 + .03*x + rnorm(20,0,.001)
+points(x, z, pch=1, col="blue")
+abline(a=.02, b=.03, col="red")
+abline(a=.0, b=.03, col="green")
+```
+
+## APT(3) Exemple
+
+Portefeuille      E(R)       $\beta_1$         $\beta_2$
+------------      -------    ---------         ---------
+S&P500            7%          3.45               0.033
+NASDAQ            9%          4.74               0.098
+------------      -------    ---------         ---------
+------------      -------    ---------         ---------
+70% S&P +
+30% NASDAQ        7.6%          3.837              0.0525
+Portefeuille
+d'arbitrage        8%          3.837              0.0525
+------------      -------    ---------         ---------
+
+## APT (3)
+
+Conséquence de ces hypothèses:
+
+L'espérance de rendement est une fonction linéaire d'un nombre limité de facteurs:
+
+$$
+E(R_i) - R_f = \beta_{i,1} (\bar{R}_1 - R_f) + \beta_{i,2} (\bar{R}_2 - R_f) + \ldots
+$$
+
+## Trois types de modèles factoriels
+
++ Facteurs implicites statistiques
++ Facteurs explicites macroéconomiques (Roll & Ross)
++ Facteurs explicites microéconomiques (BARRA, Fama-French)
+
+## Modèle Fama-French
+
+$$
+R_{i,t} = \alpha_i + \beta_{i,M} R_{M,t} + \beta_{i, SMB} SMB_t + \beta_{i, HML} HML_t + e_{i,t}
+$$
+
+\begin{description}
+\item[$R_i$] Excédent de rendement, titre $i$
+\item[$R_M$] Excédent de rendement, marché
+\item[$SMB$] "Small Minus Big": Facteur Capitalisation
+\item[$HML$] "High Minus Low": Facteur Valorisation
+\end{description}
+
+## Modèle Fama-French
+
+```{r, echo=FALSE, message=FALSE, fig.height=5, fig.cap="Facteurs Fama-French"}
+FF.file <- "FFdownload.rda"
+if(!file.exists(file.path(data.path("FFdownload.rda")))) {
+tempf <- tempfile(fileext = ".RData")
+inputlist <- c("F-F_Research_Data_Factors", "F-F_Momentum_Factor","F-F_ST_Reversal_Factor","F-F_LT_Reversal_Factor")
+FFdownload(output_file = tempf, inputlist=inputlist)
+load(tempf)
+save(tempf, file=data.path("FFdownload.rda"))
+}
+load(data.path("FFdownload.rda"))
+
+fig <- exp(cumsum(FFdownload$`x_F-F_Research_Data_Factors`$monthly$Temp2["1960-01-01/",c("Mkt.RF","SMB","HML")]/100))
+plotFF <- plot(fig[,"Mkt.RF"],main="Market",major.ticks = "years",format.labels="%Y",col="black",lwd=2,lty=1,cex=0.8)
+plotFF <- lines(fig[,"SMB"],on=NA,main="SMB",col="darkgreen",lwd=2,lty=1,ylim=c(0,5),cex=0.8)
+plotFF <- lines(fig[,"HML"],on=NA,main="HML",col="darkred",lwd=2,lty=1,ylim=c(0,15),cex=0.8)
+plotFF
+```
+
+## Stabilité des Betas Fama-French
+
+Portefeuille:
+
++ SPY (S&P500)  25%
++ EFA (Actions ex-US) 25%
++ IJS (Small Cap Value) 20%
++ EEM (EM) weighted 20%
++ AGG (Obligations) 10%
+
+source: https://rviews.rstudio.com/2018/05/10/rolling-fama-french
+
+On calcule l'exposition du portefeuille au facteurs sur une période de 3 ans...
+
+## Stabilité des Betas Fama-French
+
+```{r FF-rolling, echo=FALSE, out.width = '100%', fig.cap="Betas Fama-French"}
+knitr::include_graphics(graphics.path("FF-rolling-betas.png"))
+```
+
+## Influence du modèle Fama-French
+
+```{r morningstar, echo=FALSE, out.width = '100%', fig.height=5, fig.cap="Diagramme Size/Value"}
+knitr::include_graphics(graphics.path("morningstar-box.png"))
+```
+
+## Autres Facteurs: Momentum (Carhart)
+
+$$
+R_{i,t} = \alpha_i + \beta_{i,M} R_{M,t} + \beta_{i, SMB} SMB_t + \beta_{i, HML} HML_t + \beta_{i,UMD} R_{UMD,t} + \ldots + e_{i,t}
+$$
+
+UMD: Up Minus Down
+
+$n$ meilleurs rendements - $n$ plus bas rendements de la periode précédente.
+
+## Momentum et Liquidité (1)
+
+```{r carnet-ordre-1, echo=FALSE, out.width = '100%', fig.height=4.5, fig.cap="Maisons du Monde"}
+knitr::include_graphics(graphics.path("Selection_024.png"))
+```
+
+## Momentum et Liquidité (2)
+
+```{r carnet-ordre-2, echo=FALSE, out.width = '100%', fig.height=4.5, fig.cap="Total"}
+knitr::include_graphics(graphics.path("Selection_025.png"))
+```
+
+## Facteurs et Fouille de Données (Harvey et al.)
+
+Plus de 300 facteurs "découverts" depuis le publication de Sharpe (1967) jusqu'en 2015 (article de Harvey).
+
+$$
+R_i(t) - R_f(t) = \alpha_i + \beta_i(R_M(t) - R_f(t)) + \gamma_i F(t) + \epsilon_i(t)
+$$
+
+## Illustration: Regression sur des séries $N(0,1)$
+
+```{r, echo=FALSE, cache=TRUE}
+nb.obs <- 200
+nb.factors <- 100
+
+R <- rnorm(nb.obs)
+F <- matrix(rnorm(nb.obs*nb.factors), nrow=nb.obs)
+
+t.stat <- rep(0, nb.factors)
+
+for(i in seq_len(nb.factors)) {
+  res <- lm(R ~F[,i])
+  t.stat[i] <- coef(summary(res))[,"t value"][2]
+}
+```
+
+```{r, fig.cap="Distribution de t-stat. Regression sur des séries N(0,1)"}
+hist(t.stat)
+```

@@ -1,0 +1,243 @@
+---
+title: "Modèle à un Facteur"
+author: "P. Hénaff"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  beamer_presentation:
+    colortheme: dolphin
+    theme: Montpellier
+  slidy_presentation: default
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{graphicx}
+  - \usepackage{subfig}
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage{wrapfig}
+  - \usepackage{float}
+  - \usepackage{colortbl}
+  - \usepackage{pdflscape}
+  - \usepackage{tabu}
+  - \usepackage{threeparttable}
+  - \usepackage{threeparttablex}
+  - \usepackage[normalem]{ulem}
+  - \usepackage{makecell}
+  - \usepackage{xcolor}
+
+
+bibliography: ../library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+print(.libPaths())
+```
+
+```{r load-libraries, include=FALSE, echo=FALSE}
+library(quantmod)
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(SuppDists)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(quadprog)
+library(knitr)
+library(kableExtra)
+library(latex2exp)
+
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+
+graphics.path <- function(filename) {
+  file.path(path.expand("../Graphics"), filename)
+}
+
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+## Risque d'un titre individuel: un paradoxe!
+
+## Rappel: Frontière Efficiente
+
+```{r cml, echo=FALSE, out.width = '100%', fig.cap="Droite de Marché des Capitaux"}
+knitr::include_graphics(graphics.path("capital-market-line.pdf"))
+```
+
+## Relation Rendement/Risque
+
+Portefeuille efficient:
+
+$$
+\mu_P = r + \left(\frac{\mu_T-r}{\sigma_T}\right) \sigma_P
+$$
+
+Titre individuel (CAPM/MEDAF):
+
+\begin{equation}
+\mu_i - r_f = \beta_i (\mu_M-r_f)
+\end{equation}
+
+## Derivation de la formule CAPM.
+
+## Decomposition du risque
+
+$$
+r_i = r_f + \beta_i(r_M - r_f) + \epsilon_i
+$$
+
+$\mathrm{cov}(\epsilon_i, r_M)=0$
+
+$$
+\sigma_i^2 = \beta_i^2 \sigma_M^2 + \sigma^2_{\epsilon}
+$$
+
+* Risque de marché $\beta_i^2 \sigma_M^2$
+* Risque spécifique $\sigma^2_{\epsilon}$
+
+## Decomposition du risque d'un portefeuille
+
+$$
+r_P = \sum_i w_i r_i
+$$
+
+$$
+\beta_P = \sum_i w_i \beta_i
+$$
+
+* Risque de marché $\beta_P^2 \sigma_M^2$
+* Risque spécifique $\sum_i w_i^2 \sigma^2_{\epsilon}$
+
+
+## Modèle statistique (Sharpe) et droite de marché des titres
+
+
+$$
+  R_i(t) = \alpha_i + \beta_i R_M(t) + e_i(t)
+$$
+
+
+## Données
+
+```{r, eval=TRUE, echo=FALSE, warning=FALSE}
+monthly.ret.file <- "./monthly.ret.rda"
+tickers <- c("AAPL", "AMZN", "MSFT", "F", "SPY", "QQQ", "XOM", "MMM", "HD", "PG", "KO")
+if(!file.exists(monthly.ret.file)) {
+monthly.ret <- NULL
+for(t in tickers) {
+  p <- getSymbols(t, auto.assign = FALSE)
+  tmp <- monthlyReturn(p[, 6])
+  colnames(tmp) <- t
+  if(is.null(monthly.ret)) {
+    monthly.ret <- tmp
+  } else {
+    monthly.ret <- cbind(monthly.ret, tmp)
+  }
+}
+monthly.ret <- na.omit(monthly.ret)
+save(monthly.ret, file='monthly.ret.rda')
+}
+load(monthly.ret.file)
+```
+
+```{r}
+kable(table.Stats(monthly.ret), "latex", booktabs=T) %>% kable_styling(latex_options="scale_down")
+```
+
+## MSFT & SPY
+
+```{r}
+plot(monthly.ret[,c("MSFT", "SPY")])
+```
+
+## Calcul de $\beta$
+
+```{r, echo=TRUE}
+beta_roll <- na.omit(rollapply(data=monthly.ret$MSFT, Rb=monthly.ret$SPY,
+                                FUN=CAPM.beta, width=36, by=1))
+```
+
+```{r, fig.height=5}
+plot(beta_roll)
+```
+
+## Calcul de $\alpha$
+
+```{r, echo=TRUE}
+alpha_roll <- na.omit(rollapply(data=monthly.ret$MSFT, Rb=monthly.ret$SPY,
+                                 FUN=CAPM.alpha, width=36, by=1))
+```
+```{r, fig.height=5}
+plot(alpha_roll)
+```
+
+## Mesures de performance
+
+Prendre en compte à la fois la rentabilité moyenne et le risque subi.
+
+- Ratio de Sharpe, fondé sur $\sigma$, adapté à l'évaluation d'un portefeuille bien diversifié
+- Alpha de Jensen, fondé sur $\beta$, adapté aux titres individuels.
+
+
+
+## Ratio de Sharpe
+
+$$
+S_P = \frac{\overline{r_P} - \overline{r_f}}{\sigma_P}
+$$
+Permet de visualiser la performance par rapport à la CML sur a graphique rendement/risque.
+
+## Ratio de Treynor
+
+$$
+S_P = \frac{\overline{r_P} - \overline{r_f}}{\beta_P}
+$$
+
+Permet de visualiser la performance du portefeuille par rapport à la droite des actifs risqués (Security Market Line: SML)
+
+## Ratio $M^2$ (Modigliani & Miller)
+
+$$
+M^2_P = \overline{r_f} + \frac{\sigma_B}{\sigma_P} (\overline{r_P} - \overline{r_f})
+$$
+Une mesure de performance ajustée pour le risque, à comparer avec le rendement moyen d'un portefeuille de référence $B$.
+
+## Alpha de Jensen
+
+$$
+\overline{R_p} -r_f = \alpha_p + \beta_p (\overline{R_M} - r_f) + \epsilon_p
+$$
+
+Visuellement, le terme $\alpha_p$ représente la distance verticale entre le portefeuille et la SML dans un diagramme rendement/beta.
+
+## Division du travail en Gestion de Portefeuille
+
+* Espérance de rendement (analyse financière)
+  $$
+  E(R_i(t)) = \alpha_i + \beta_i E(R_M(t))
+  $$
+
+* Variance (gestion du risque)
+  $$
+  \sigma_i^2 = \beta_i^2 \sigma_M^2 + \sigma(e_i)^2
+  $$
+

@@ -1,0 +1,85 @@
+---
+title: "Finance Quantitative"
+subtitle: "Calcul Actuariel"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(quantmod)
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(SuppDists)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(kableExtra)
+library(quadprog)
+```
+
+# Time Value of Money (Van Horne)
+ 
+Consider the following cash flow streams:
+
+\begin{table}[ht]
+  \centering
+\begin{tabular}{llllll}
+\toprule \\
+Year & 1 & 2 & 3 & 4 & 5 \\
+\midrule
+W & 100 & 200 & 200 & 300 & 300 \\
+X & 600 &     &     &     & \\
+Y &     &     &     &     & 1200 \\
+Z & 200 &     & 500 &     & 300 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{enumerate}
+  \item Compute the future value of each stream at a compounded rate of 10\%.
+  \item Compute the present value of each stream at a compounded rate of 14\%.
+\end{enumerate}
+
+
+# Comparing contracts (Van Horne)
+
+On a contract, you have a choice of receiving 25,000 \euro in six years or 50,000 \euro in 12 years. At which compound annual rate would you be indifferent between the two options?
+
+
+# Mortgage (Van Horne)
+
+You obtain a 10-year, 50,000 \euro\  loan. The compound annual interest rate is 8\%. The loan is paid back by 10 annual installments of 7,451.47 \euro. 
+
+\begin{enumerate}
+\item How much of the first year payment is principal?
+\item How much total interest will be paid over the life of the loan?
+\end{enumerate}
+
+# Savings Plan
+
+You need to have 50,000 \euro\  at the end of ten years. To accumulate this sum, you plan to save a certain amount at the end of each year, for the next ten years. The bank pays 8\% interest, compounded annually. How much should you save each year?
+
+
+# Mortgage Paydown
+
+You have borrowed 14,300 \euro\  at a compound annual interest rate of 15\%. You can make annual payments of 3,000 \euro\  on your loan. How long will it be before your loan is completely paid down?
+

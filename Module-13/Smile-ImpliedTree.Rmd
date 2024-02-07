@@ -1,0 +1,397 @@
+---
+title: "Quantitative Finance"
+author: "Patrick Hénaff"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+
+output:
+  bookdown::pdf_document2:
+    keep_tex: no
+    fig_caption: yes
+    latex_engine: pdflatex
+csl: ../apa.csl
+subtitle: Implied Trees
+geometry: margin=1in
+bibliography: ../library.bib
+email: pa.henaff@gmail.com
+fontfamily: mathpazo
+fontsize: 11pt
+header-includes:
+- \linespread{1.05}
+- \usepackage[utf8]{inputenc}
+---
+
+```{r folder-tools, include=TRUE}
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+```
+
+```{r setup-utils, include=TRUE}
+source(file.path(get.src.folder(), 'OptionUtils.R'))
+```
+
+The Breeden-Litzenberger formula provides the density of the underlying
+asset at expiry as a function of vanilla prices. In many instances, for
+pricing American options for example, it is important to know the
+density at any time $t$ between the current time and expiry. In this
+note, we construct the function $\sigma(S_t,t)$, i.e. the
+instantaneous volatility as a function of the underlying asset and time.
+
+# The Derman-Kani Implied Tree
+
+In a standard trinomial tree, the transition probabilities are
+independent of the state. By contrast, the Derman-Kani implied tree
+involves transition probabilities that are state-dependent. With this
+extension, one obtain a model that matches the observed prices of
+vanilla options at various maturities and strikes.
+
+## Principle
+
+We start with a trinomial tree constructed with a constant volatility.
+This determines the geometry of the tree, according to the formulae
+derived earlier. We will now modify the transition
+probabilities in order to match observed option prices.
+
+Let’s focus on one node and its three children nodes. The notation is
+illustrated in Figure \@ref(fig:tree-diagram).
+
+```{tikz, tree-diagram, fig.cap="One step of a trinomial tree", fig.align="center", echo=FALSE}
+  \begin{tikzpicture}[level distance=1.5cm]
+    \tikzstyle{level 0}=[rectangle, draw]
+    \tikzstyle{level 1}=[rectangle, draw]
+    \tikzstyle{edge from parent}=[->,draw]
+    \tikzstyle{blank}=[rectangle]
+    \node[level 0] {$S_i$} [grow'=right,sibling distance=1cm]
+      child {node[level 1] {$S'_{i+2}$}
+            edge from parent node[blank,above left] {$p_i$}
+            }
+      child {node[level 1] {$S'_{i+1}$}
+            edge from parent node[blank,below left] {}
+            }
+      child {node[level 1] {$S'_i$}
+            edge from parent node[blank,below left] {$q_i$}
+            };
+    \end{tikzpicture}
+```
+
+States $S_i$ are associated with maturity $T$, and states $S'_i$ with
+maturity $T+\Delta t$. We will also use the following notation:
+
+$\lambda_i$
+:   state price for node $i$
+
+$C(S'_i)$
+:   call price, strike $S'_i$, maturity $T+\Delta t$
+
+The call can be priced in the trinomial tree, giving:
+
+$$\begin{aligned}
+C(S'_i) &=& \lambda_i e^{-r\Delta t} p_i (S'_{i+2} - S'_{i+1}) \\
+&& + \sum_{j=i+1}^{2n} \lambda_j e^{-r\Delta t} \left[ p_j (S'_{j+2} -S'_{i+1}) + (1-p_j-q_j)  (S'_{j+1} -S'_{i+1}) + q_j  (S'_{j} -S'_{i+1}) \right]\end{aligned}$$
+
+The price process in the tree is a martingale, and thus:
+$$\begin{aligned}
+S'_j e^{r \Delta t} &=& F_j \\
+&=& p_j S'_{j+2} + (1-p_j-q_j)  S'_{j+1} + q_j  S'_{j} -S'_{i+1}\end{aligned}$$
+
+Using this identiy, the call price becomes:
+$$\begin{aligned}
+C(S'_i) &=& \lambda_i e^{-r\Delta t} p_i (S'_{i+2} - S'_{i+1}) \\
+&& + \sum_{j=i+1}^{2n} \lambda_j e^{-r\Delta t} \left[ F_j - S'_{i+1} \right]\end{aligned}$$
+
+In the equation above, all quantities except $p_i$ are known, yielding:
+$$p_i = \frac{e^{r\Delta t} C(S'_{i+1}) - \sum_{j=i+1}^{2n} \lambda_j e^{-r\Delta t} \left[ F_j - S'_{i+1} \right]}{\lambda_i(S'_{i+2} - S'_{i+1})}
+\label{eq:trinomial-pi}$$
+
+Using again the martingale property, one can compute the probability
+$q_i$:
+
+$$q_i = \frac{F_i - p_i (S'_{i+2} - S'_{i+1}) - S'_{i+1}}{S'_i - S'_{i+1}}
+\label{eq:trinomial-qi}$$
+
+The corresponding local volatility at node $S'_i$ is finally obtained
+by:
+$$\begin{aligned}
+\lefteqn{\sigma(S'_i, T) F_i^2 \Delta t =} \nonumber \\
+&& p_i (S'_{i+2} - F_i)^2 + (1-p_i-q_i) (S'_{i+1} - F_i)^2 + q_i (S'_{i} - F_i)^2
+\label{eq:local-vol}\end{aligned}$$
+
+A similar calculation can be performed with put prices.
+
+## Illustration
+
+For the sake of this example, we will use a simple expression for the
+Black-Scholes volatility, function of time to expiry ($T$) and spot
+price ($S$):
+
+$$\sigma(S, T) = \sigma_0 (1+a(S-100)) + bT
+(\#eq:bs-vol-in-tree)$$
+
+```{r, label=Black-Scholes-Vol-Function, echo=T}
+  sigma <- .3
+  a <- -.2/100
+  b <- 0
+  bsvol <- function(S,T) {
+    sigma*(1+a*(S-100)) + b*T
+  }
+```
+
+We now proceed step-by-step in the calculation process. The first step
+is to construct a classical trinomial tree, with constant probabilities.
+This determines the geometry of the tree.
+
+In this example, we construct a 3-periods tree, anual volatility is
+$30\%$. For simplicity, interest rate and dividend yield is set to 0.
+
+```{r, label=ImpliedTree-2, echo=T}
+  ## all rates = 0
+  r <- 0
+  b <- 0
+
+  ## time steps
+  n <- 3
+  dt <- .01
+
+  # number of rows and columns in the price grid
+  nr <- 2*(n+1)-1
+  nc <- (n+1)
+  T <- seq(0, nc) * dt
+
+  ## Trinomial tree
+  u <- exp(sigma*sqrt(2*dt))
+  d <- 1/u
+  ## constant probabilities
+  pu <- ((exp(r*dt/2)-exp(-sigma*sqrt(dt/2)))/(exp(sigma*sqrt(dt/2))-exp(-sigma*sqrt(dt/2))))^2
+  pd <- (1-sqrt(pu))^2
+  pm <- 1-pu-pd
+  ## grid of prices at each tree node
+  S <- matrix(data=NA, nrow=nr, ncol=nc)
+  for(j in seq(1,nc)) {
+    S[1:(1+2*(j-1)),j] <- 100 * u^(j-1) * d^seq(0, 2*(j-1))
+  }
+```
+
+```{r, echo=FALSE}
+TrinomialTreePlot <- function (TrinomialTreeValues, dx = -0.025, dy = 0.4, cex = 1,
+    digits = 2,  ...)
+{
+    # draw 3 branches originating at node (x,y)
+    drawLines <- function(x,y,col=2) {
+      xx = c(x,x+1)
+      for(k in -1:1) {
+        yy = c(y, y+k)
+       lines(x=xx,y=yy,col=col)
+      }
+    }
+    Tree = round(TrinomialTreeValues, digits = digits)
+    depth = ncol(Tree)
+    # frame and coordinates:
+    plot(x = c(1, depth), y = c(-depth+1, depth-1), type = "n",
+        col = 0, yaxt='n', xaxt='n', xlab='step', ylab='', ...)
+    axis(1,at=1:depth)
+    # tree root
+    points(x = 1, y = 0)
+    drawLines(1,0)
+    text(1 + dx, 0 + dy, deparse(Tree[1, 1]), cex = cex)
+    for (i in 1:(depth - 1)) {
+        y = seq(from = i, by = -1, length = 2*i + 1)
+        x = rep(i, times = length(y)) + 1
+        points(x, y, col = 1)
+        # place text
+        for (j in 1:length(x)) text(x[j] + dx, y[j] + dy, deparse(Tree[j, i + 1]), cex = cex)
+
+        if(i<(depth-1)) {
+          for (k in 1:length(x)) drawLines(x[k], y[k])
+        }
+    }
+    invisible()
+}
+```
+
+The resulting tree is pictured in Figure \@ref(fig:Derman-Kani-1). This is
+a standard trinomial tree. Branching probabilities are identical at each
+node, volatility at each node is also constant, $30\%$ annual rate.
+
+```{r Derman-Kani-1,echo=FALSE,fig.width=11,fig.height=7, fig.cap="Constant volatility trinomial tree"}
+  TrinomialTreePlot(S, dx = -0.025, dy = 0.4, cex = 1,
+      digits = 1, main='Constant Volatility Tree')
+```
+
+The next step is to price calls and puts expiring at each time step, and
+struck at each mode value. The volatility used to price each option is
+time and strike dependent, per equation (\@ref(eq:bs-vol-in-tree).
+
+The volatility grid is computed by evaluating the volatility function
+for each node:
+
+```{r, echo=TRUE}
+  Vol <- matrix(data=NA, nrow=nr, ncol=nc)
+  for(i in seq(1,nr)) {
+    for(j in seq(1, nc))
+      if(!is.na(S[i,j])) Vol[i,j] <- bsvol(S[i,j], T[j])
+  }
+```
+
+and this volatility is used to compute the call and put prices expiring
+at each time step and strike level:
+
+```{r, }
+  ## matrice des prix call/put
+  Call <- matrix(data=NA, nrow=nr, ncol=nc)
+  Put <- matrix(data=NA, nrow=nr, ncol=nc)
+  for(i in seq(1,nr)) {
+    for(j in seq(2, nc))
+      if(!is.na(S[i,j])) {
+          Call[i,j] <- CRRTrinomial('ce', S[1,1], S[i,j], T[j], r, b, Vol[i,j], j-1)$price
+          Put[i,j] <- CRRTrinomial('pe', S[1,1], S[i,j], T[j], r, b, Vol[i,j], j-1)$price
+      }
+  }
+```
+
+Next, we use equations \@ref(eq:trinomial-pi) and \@ref(eq:trinomial-qi)
+to compute the transition probabilities at each node. The probability
+$p_i$ is computed by:
+
+```{r, }
+  p <- function(i, j) {
+    # S'_{i+1} and S'_{i+2}
+    SP1 <- S[i+1, j+1]
+    SP2 <- S[i, j+1]
+    # vector of lambdas
+    tmp = 0
+    if(i>1) {
+      l <- Lambda[1:(i-1),j]
+      F <- S[1:(i-1),j]*exp(r*dt)
+      #print(paste('F: ', F, ' SP1: ', SP1, ' SP2: ', SP2))
+      tmp = t(l) %*% (F-SP1)
+    }
+    # prob
+    (exp(r*dt)*Call[i+1,j+1] - tmp)/(Lambda[i,j]*(SP2-SP1))
+  }
+```
+
+and the probability $q_i$ is determined by:
+
+```{r, }
+  q <- function(i, j) {
+    # S'_{i+2}, S'_{i+1} and S'_{i}
+    SP2 <- S[i, j+1]
+    SP1 <- S[i+1, j+1]
+    SP <- S[i+2, j+1]
+    F <- S[i,j]*exp(r*dt)
+    (F-p(i,j)*(SP2-SP1)-SP1)/(SP-SP1)
+  }
+```
+
+With these two functions, we can proceed recursively, computing the
+state prices and the transition probabilities one time step at a time.
+Note that functions $p$ and $q$ above use as input the state prices up
+to time step $i-1$ in order to compute the transition probabilities at
+time step $i$. The transition probabilites for the root node are
+computed immediately:
+
+```{r, }
+  Lambda <- matrix(data=NA, nrow=7, ncol=4)
+  Lambda[1,1] <- 1
+  Pu <- p(1,1)
+  Pd <- q(1,1)
+  Pm <- 1-Pu-Pd
+```
+
+and this provides the data for computing the state prices
+$\lambda_{i,2}, i=1, \ldots, 3$ for time step $\Delta t$.
+
+```{r, }
+  Lambda[1,2] <- Pu * exp(-r*dt)
+  Lambda[2,2] <- Pm * exp(-r*dt)
+  Lambda[3,2] <- Pd * exp(-r*dt)
+```
+
+The state prices for the other time steps are computed similarly.
+
+```{r, }
+  Lambda[1,3] <- p(1,2)*Lambda[1,2]
+  Lambda[2,3] <- (1-p(1,2)-q(1,2))*Lambda[1,2] + p(2,2)*Lambda[2,2]
+  Lambda[3,3] <- q(1,2)*Lambda[1,2] + (1-p(2,2)-q(2,2))*Lambda[2,2] + p(3,2)*Lambda[3,2]
+  Lambda[4,3] <- (1-p(3,2)-q(3,2))*Lambda[3,2] + q(2,2)*Lambda[2,2]
+  Lambda[5,3] <- q(3,2)*Lambda[3,2]
+
+  Lambda[1,4] <- p(1,3)*Lambda[1,3]
+  Lambda[2,4] <- (1-p(1,3)-q(1,3))*Lambda[1,3] + p(2,3)*Lambda[2,3]
+  Lambda[3,4] <- q(1,3)*Lambda[1,3] + (1-p(2,3)-q(2,3))*Lambda[2,3] + p(3,3)*Lambda[3,3]
+  Lambda[4,4] <- q(2,3)*Lambda[2,3] + (1-p(3,3)-q(3,3))*Lambda[3,3] + p(4,3)*Lambda[4,3]
+  Lambda[5,4] <- q(3,3)*Lambda[3,3] + (1-p(4,3)-q(4,3))*Lambda[4,3] + p(5,3)*Lambda[5,3]
+  Lambda[6,4] <- (1-p(5,3)-q(5,3))*Lambda[5,3] + q(4,3)*Lambda[4,3]
+  Lambda[7,4] <- q(5,3)*Lambda[5,3]
+```
+
+Since interest rate is 0, the state prices at each time step should sum
+up to 1. This is verified by:
+
+```{r, }
+  z <- apply(Lambda, 2, function(x){sum(x[!is.na(x)])})
+  print(z)
+```
+
+Having determined the state prices, we record the transition
+probabilites in grids, in order to facilitate the display. The up and
+down probabilities associated with each node are displayed in
+Figure \@ref(fig:Derman-Kani-3).
+
+```{r, }
+  Pup <- matrix(data=NA, nrow=nr, ncol=nc)
+  Pdn <- matrix(data=NA, nrow=nr, ncol=nc)
+  Pmd <- matrix(data=NA, nrow=nr, ncol=nc)
+  for(i in seq(1,nr)) {
+    for(j in seq(1, nc-1))
+      if(!is.na(S[i,j])) {
+        Pup[i,j] <- p(i,j)
+        Pdn[i,j] <- q(i,j)
+        Pmd[i,j] <- 1-Pup[i,j]-Pdn[i,j]
+      }
+  }
+```
+
+```{r Derman-Kani-3,echo=FALSE,fig.width=11,fig.height=7, fig.cap="Up and down probabilities"}
+  par(mfrow=c(1,2))
+  TrinomialTreePlot(Pup[,1:(nc-1)], dx = -0.025, dy = 0.4, cex = 1,
+      digits = 2, main='Prob Up', ylim=c(-(nc-2), nc-1))
+  TrinomialTreePlot(Pdn[,1:(nc-1)], dx = -0.025, dy = 0.4, cex = 1,
+      digits = 2, main='Prob down', ylim=c(-(nc-2), nc-1))
+  par(mfrow=c(1,1))
+```
+
+Finally, the local volatility at each node can be computed from the
+transition probabilities:
+
+```{r, }
+  lvol <- function(i,j) {
+    SP2 <- S[i, j+1]
+    SP1 <- S[i+1, j+1]
+    SP <- S[i+2, j+1]
+    F <- S[i,j]*exp(r*dt)
+    sqrt((Pup[i,j]*(SP2-F)^2 + Pdn[i,j]*(SP-F)^2 + Pmd[i,j]*(SP1-F)^2)/(F^2*dt))
+  }
+
+  LVol <- matrix(data=NA, nrow=nr, ncol=nc)
+  for(i in seq(1,nr)) {
+    for(j in seq(1, nc-1))
+      if(!is.na(S[i,j])) {
+        LVol[i,j] <- lvol(i,j)
+      }
+  }
+```
+
+Figure \@ref(fig:Derman-Kani-4) shows the local volatility associated with
+each node, and, for comparison, the Black-Scholes volatility, which is
+the average volatility from time $0$ to expiry associated with a
+particular strike and expiry date.
+
+```{r Derman-Kani-4,echo=FALSE,fig.width=11,fig.height=7, fig.cap="Local volatility and Black-Scholes average volatility at each node"}
+  par(mfrow=c(1,2))
+  TrinomialTreePlot(LVol[,1:(nc-1)]*100, dx = -0.025, dy = 0.4, cex = 1,
+      digits = 1, main='Local Vol', ylim=c(-(nc-2), nc-1))
+  TrinomialTreePlot(Vol[,1:(nc)]*100, dx = -0.025, dy = 0.4, cex = 1,
+      digits = 1, main='BS Vol', ylim=c(-(nc-1), nc))
+  par(mfrow=c(1,1))
+```

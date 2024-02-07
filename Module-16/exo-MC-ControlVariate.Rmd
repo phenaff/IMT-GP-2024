@@ -1,0 +1,66 @@
+---
+title: "Finance Quantitative"
+subtitle: |
+  | Méthode de Monte-Carlo
+  | et variables de controle
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(xtable)
+library(anytime)
+```
+
+Dans cet exercice, on se propose de valoriser une option Asiatique par simulation.
+
+# Données
+
+Données de marché
+
+```{r, echo=TRUE}
+S <- 100
+sigma=.3
+r=.01
+```
+
+Charactéristiques du call Asiatique arithmétique:
+
+```{r, echo=TRUE}
+# Strike
+K <- 100
+dtExpiry <- anydate('01jan2011')
+dtStart <- anydate('01jan2010')
+# moyenne arithmétique sur 50 pas de temps
+nbSteps <- 50
+```
+
+# Etapes du calcul
+
+## Générez des scénarios avec 50 dates d'observations entre la date de calcul et la maturité de l'option.
+
+
+## Vérification: calculer le prix d'un call Européen, et comparer à la valeur analytique.
+
+On peut faire ce calcul à différentes dates.
+
+
+## Valoriser l'option Asiatique et comparer aux formules approximées disponibles dans le package RQuantLib ou fAsianOptions.
+
+
+## Utiliser une option Européenne comme variable de controle et corriger le prix de l'option Asiatique
+

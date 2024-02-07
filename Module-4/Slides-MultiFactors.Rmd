@@ -1,0 +1,250 @@
+---
+title: "Modèles Multi-Facteurs"
+author: "P. Hénaff"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  beamer_presentation:
+    colortheme: dolphin
+    theme: Montpellier
+  slidy_presentation: default
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{graphicx}
+  - \usepackage{subfig}
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage{wrapfig}
+  - \usepackage{float}
+  - \usepackage{colortbl}
+  - \usepackage{pdflscape}
+  - \usepackage{tabu}
+  - \usepackage{threeparttable}
+  - \usepackage{threeparttablex}
+  - \usepackage[normalem]{ulem}
+  - \usepackage{makecell}
+  - \usepackage{xcolor}
+
+
+bibliography: ../library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+```{r load-libraries, include=FALSE, echo=FALSE}
+library(quantmod)
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(SuppDists)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(quadprog)
+library(knitr)
+library(kableExtra)
+library(latex2exp)
+library(FFdownload)
+#library(fPortfolio)
+#library(BLCOP)
+library(mnormt)
+library(riskParityPortfolio)
+
+
+
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+## Droite de Marché des Capitaux
+
+```{r cml, echo=FALSE, out.width = '100%', fig.cap="Droite de Marché des Capitaux"}
+knitr::include_graphics("../Graphics/capital-market-line.pdf")
+```
+
+## MEDAF: Droite de Marché des Titres
+
+```{r, capm, echo=FALSE, fig.cap="Droite de Marché des Titres", fig.height=5}
+x <- runif(20, .5, 2)
+y <- .02 + .03*x + rnorm(20,0,.0025)
+plot(x,y, xlim=c(0, 2.5), ylim=c(0, .1), bty="no", pch=1, col="blue", xlab=expression(beta),
+     ylab=expression(E(r)))
+abline(a=.02, b=.03, col="red")
+```
+
+## APT
+
+Valorisation par Arbitrage
+
+
++ Rendement fonction linéaire d'un nombre limité de facteurs
++ Il y a assez de titres sur le marché pour créer des portefeuilles où le risque spécifique a été diversifié
+
+## APT
+::: columns
+
+:::: column
+```{r, apt-1, echo=FALSE, fig.cap="Portefeuille diversifié"}
+x <- runif(20, -2, 2)
+y <- .02 + .03*x + rnorm(20,0,.0015)
+plot(x,y, xlim=c(-2.5, 2.5), ylim=c(-.1, .1), bty="no", pch=1, col="blue", xlab=expression(F),
+     ylab=expression(E(r)))
+abline(a=.02, b=.03, col="red")
+```
+::::
+
+:::: column
+```{r, apt-2, echo=FALSE, fig.cap="Action Simple"}
+x <- runif(20, -2, 2)
+y <- .02 + .03*x + rnorm(20,0,.01)
+plot(x,y, xlim=c(-2.5, 2.5), ylim=c(-.1, .1), bty="no", pch=1, col="blue", xlab=expression(F),
+     ylab=expression(E(r)))
+abline(a=.02, b=.03, col="red")
+```
+::::
+
+:::
+
+## APT
+
+Hypothèse:
+
+$$
+R_i = \mu_i + \sum_k \beta_{ik} F_k + \epsilon_i
+$$
+
+Alors l'exces de rendement $\mu_i - r_0$ est uniquement fonction de l'exposition du titre aux facteurs:
+
+$$
+\mu_i - r_0 = \sum_k \beta_{ik} \lambda_k
+$$
+
+
+
+## Modèle Explicites
+
+### BARRA
+
+- Les $\beta$ sont définis \textit{a priori}
+- Les rendements des facteurs sont estimés par regression
+
+$$
+R_t = B f_t + \epsilon_t
+$$
+
+### Fama-French
+
+- Les rendements des facteurs sont connus
+- On estime les $\beta$ par regression
+
+
+
+## Modèle Fama-French
+
+
+$$
+R_{i,t} = \alpha_i + \beta_{i,M} R_{M,t} + \beta_{i, SMB} SMB_t + \beta_{i, HML} HML_t + e_{i,t}
+$$
+
+\begin{description}
+\item[$R_i$] Excédent de rendement, titre $i$
+\item[$R_M$] Excédent de rendement, marché
+\item[$SMB$] "Small Minus Big": Facteur Capitalisation
+\item[$HML$] "High Minus Low": Facteur Valorisation
+\end{description}
+
+## Modèle Fama-French
+
+```{r, echo=FALSE, message=FALSE, fig.height=5, fig.cap="Facteurs Fama-French"}
+FF.file <- "FFdownload.rda"
+if(!file.exists(file.path(get.data.folder(),"FFdownload.rda"))) {
+tempf <- tempfile(fileext = ".RData")
+inputlist <- c("F-F_Research_Data_Factors", "F-F_Momentum_Factor","F-F_ST_Reversal_Factor","F-F_LT_Reversal_Factor")
+FFdownload(output_file = tempf, inputlist=inputlist)
+load(tempf)
+save(tempf, file=file.path(get.data.folder(),"FFdownload.rda"))
+}
+load(file.path(get.data.folder(),"FFdownload.rda"))
+
+fig <- exp(cumsum(FFdownload$`x_F-F_Research_Data_Factors`$monthly$Temp2["1960-01-01/",c("Mkt.RF","SMB","HML")]/100))
+plotFF <- plot(fig[,"Mkt.RF"],main="Market",major.ticks = "years",format.labels="%Y",col="black",lwd=2,lty=1,cex=0.8)
+plotFF <- lines(fig[,"SMB"],on=NA,main="SMB",col="darkgreen",lwd=2,lty=1,ylim=c(0,5),cex=0.8)
+plotFF <- lines(fig[,"HML"],on=NA,main="HML",col="darkred",lwd=2,lty=1,ylim=c(0,15),cex=0.8)
+plotFF
+```
+
+## Stabilité des Betas Fama-French (1)
+
+Portefeuille:
+
++ SPY (S&P500)  25%
++ EFA (Actions ex-US) 25%
++ IJS (Small Cap Value) 20%
++ EEM (EM) weighted 20%
++ AGG (Obligations) 10%
+
+## Stabilité des Betas Fama-French (2)
+
+```{r FF-rolling, echo=FALSE, out.width = '100%', fig.cap="Betas Fama-French"}
+knitr::include_graphics("../Graphics/FF-rolling-betas.png")
+```
+
+## Influence du modèle Fama-French
+
+```{r morningstar, echo=FALSE, out.width = '100%', fig.height=5, fig.cap="Diagramme Size/Value"}
+knitr::include_graphics("../Graphics/morningstar-box.png")
+```
+
+## Autres Facteurs: Momentum
+
+$$
+R_{i,t} = \alpha_i + \beta_{i,M} R_{M,t} + \beta_{i, SMB} SMB_t + \beta_{i, HML} HML_t + \beta_{i,UMD} R_{UMD,t} + \ldots + e_{i,t}
+$$
+
+UMD: Up Minus Down
+
+## Momentum et Liquidité (1)
+
+```{r carnet-ordre-1, echo=FALSE, out.width = '100%', fig.height=4.5, fig.cap="Maisons du Monde"}
+knitr::include_graphics("../Graphics/Selection_024.png")
+```
+
+## Momentum et Liquidité (2)
+
+```{r carnet-ordre-2, echo=FALSE, out.width = '100%', fig.height=4.5, fig.cap="Total"}
+knitr::include_graphics("../Graphics/Selection_025.png")
+```
+
+## Facteurs et Fouille de Données (Harvey et al.)
+
+$$
+R_i(t) - R_f(t) = \alpha_i + \beta_i(R_M(t) - R_f(t)) + \gamma_i F(t) + \epsilon_i(t)
+$$
+
+$$
+\frac{\hat{\gamma_i}}{\sigma(\gamma_i)} \sim  \mbox{t-stat}
+$$
+
+Erreur Type I: Accepter un facteur alors qu'il n'est pas significatif.
+

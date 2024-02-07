@@ -1,0 +1,269 @@
+---
+title: "Black-Litterman"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: true
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+
+bibliography: ../library.bib
+csl: ../apa.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+```{r load-libraries, include=TRUE, echo=TRUE, message=FALSE, warning=FALSE}
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(kableExtra)
+#library(broom)
+library(quadprog)
+```
+
+# Principle
+
+Bayesian approach:
+
+* The expected returns are random variables
+* CAPM equilibrium distribution as prior
+* additional probabilistic views combined with prior to get posterior distribution of expected return.
+
+Distribution of asset returns:
+
+$$
+r \sim \mathcal{N}(\mu, \Sigma)
+$$
+
+Assume quadratic utility function, where $\delta$ is the risk premium:
+
+$$
+U(w) = w^T \Pi - \frac{\delta}{2} w^T \Sigma w
+$$
+Solve first order conditions for optimality to get
+
+$$
+\Pi = \delta \Sigma w_{eq}
+$$
+
+The expected return $\mu$ is also a random variable. The bayesian prior is such that
+$$
+\mu = \Pi + \epsilon^{(e)}
+$$
+with
+$$
+\epsilon^{(e)} \sim \mathcal{N}(0, \tau \Sigma)
+$$
+where $\tau$ is a scalar that indicates the uncertainty of the prior.
+
+Views are expressed as portfolios whose returns are independent random normal variables.
+
+$$
+P \mu = Q + \epsilon^{(v)}
+$$
+with
+$$
+\epsilon^{(v)} \sim \mathcal{N}(0, \Omega)
+$$
+
+# Posterior distribution
+
+## GLS linear model
+
+Consider the linear model
+$$
+Y = X \beta + E
+$$
+with $\textrm{Cov}(E|X) = \Omega = \sigma^2V$
+
+$$
+\hat{\beta} = (X^T \Omega^{-1}X)^{-1} X^T \Omega^{-1} Y
+$$
+
+Proof:
+
+Set $\Omega = K^TK$ and define $Z=K^{-1}Y, B=K^{-1}X, g=K^{-1}\epsilon$, the linear model becomes:
+$$
+Z = B\beta + g
+$$
+with $E(g)=0$ and $V(g)=\sigma^2I$. Applying OLS to this model yields the desired result.
+
+## Theil's estimatiom method for posterior distribution
+
+Prior distribution for return
+$$
+\Pi = I \mu + \epsilon^{(e)}
+$$
+Additional information:
+$$
+Q = P \mu + \epsilon^{(v)}
+$$
+Combine two equations:
+$$
+\begin{bmatrix}
+\Pi \\
+Q
+\end{bmatrix}
+ =
+\begin{bmatrix}
+I \\
+P
+\end{bmatrix}
+\mu +
+\begin{bmatrix}
+\epsilon^{(e)} \\
+\epsilon^{(v)}
+\end{bmatrix}
+$$
+Apply GLS:
+
+\def\O{
+\begin{bmatrix}
+\tau \Sigma & \\
+& \Omega
+\end{bmatrix}
+}
+
+\def\X{
+\begin{bmatrix}
+I \\
+P
+\end{bmatrix}
+}
+
+$$
+\mu^* = \left( \X^T \O^{-1} \X \right)^{-1}\X^T\O^{-1} \begin{bmatrix}
+\Pi \\
+Q
+\end{bmatrix}
+$$
+
+After algebraic manipulations:
+
+Posterior mean of expected returns:
+
+$$
+\mu^* = \left[ (\tau \Sigma)^{-1} + P^T\Omega^{-1} P \right]^{-1} \left[ (\tau \Sigma)^{-1} \Pi + P^T\Omega^{-1} Q \right]
+$$
+
+Posterior covariance of expected returns:
+
+$$
+M^{-1} = \left[ (\tau \Sigma)^{-1} + P^T\Omega^{-1} P \right]^{-1}
+$$
+Consequence: the posterior distribution of returns is
+$$
+r \sim \mathcal{N}(\mu^*, \Sigma^*)
+$$
+with $\Sigma^* = \Sigma + M^{-1}$.
+
+# Portfolio optimization
+
+One can now find the optimal weights by solving the classical mean-variance problem:
+
+$$
+    \mbox{max} \   w^T\mu^*  - \frac{\delta}{2} w^T \Sigma^* w  \\
+$$
+
+the solution being:
+$$
+w^* = \frac{1}{\delta} \Sigma^{*-1} \mu^*
+$$
+See paper by He and Litterman for various manipulations of this last equation.
+
+## Calculation
+
+Code freely adapted from https://github.com/systematicinvestor/SIT, but using the notation of the paper.
+
+```{r, echo=FALSE}
+spl <- function (
+  s,      # input string
+  delim = ',' # delimiter
+) {
+  unlist(strsplit(s,delim))
+}
+```
+
+Market data from He & Litterman:
+```{r, echo=T}
+ data =
+'1,0.4880,0.4780,0.5150,0.4390,0.5120,0.4910
+ 0.4880,1,0.6640,0.6550,0.3100,0.6080,0.7790
+ 0.4780,0.6640,1,0.8610,0.3550,0.7830,0.6680
+ 0.5150,0.6550,0.8610,1,0.3540,0.7770,0.6530
+ 0.4390,0.3100,0.3550,0.3540,1,0.4050,0.3060
+ 0.5120,0.6080,0.7830,0.7770,0.4050,1,0.6520
+ 0.4910,0.7790,0.6680,0.6530,0.3060,0.6520,1'
+
+  Corrmat = matrix( as.double(spl( gsub('\n', ',', data), ',')),
+                    nrow = length(spl(data, '\n')), byrow=TRUE)
+
+  stdevs = c(16.0, 20.3, 24.8, 27.1, 21.0,  20.0, 18.7)/100
+  w.eq = c(1.6, 2.2, 5.2, 5.5, 11.6, 12.4, 61.5)/100
+  # Prior covariance of returns
+  Sigma = Corrmat * (stdevs %*% t(stdevs))
+```
+
+Equilibrium risk premium
+
+```{r, echo=T}
+# risk aversion parameter
+delta = 2.5
+Pi = delta * Sigma %*% w.eq
+```
+
+Summary market data
+
+```{r}
+AssetNames = c('Australia','Canada','France','Germany','Japan','UK','USA')
+Table2 = cbind(AssetNames, round(cbind(stdevs, w.eq, Pi) * 100,1))
+colnames(Table2) = c('Assets','Std Dev','Weq','PI')
+kable(Table2, format='latex', booktabs=T) %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+## View 1: is The German equity market will outperform the rest of European Markets by 5% a year.
+
+These calculations reproduce the results shown in Table 4 of Litterman and He's paper.
+
+```{r, echo=TRUE}
+P = matrix(c(0, 0, -29.5, 100, 0, -70.5, 0)/100, nrow=1)
+Q = 5/100
+# footnote (8) of Litterman and He paper
+tau = 0.05
+
+Omega = as.matrix(diag(tau * P %*% Sigma %*% t(P)))
+tau.Sigma.inv = solve(tau*Sigma)
+M.inverse = solve(tau.Sigma.inv + (t(P) %*% solve(Omega) %*% P))
+mu.bar = M.inverse %*% (tau.Sigma.inv %*% Pi + t(P) %*% solve(Omega) %*% Q)
+Sigma.bar = M.inverse + Sigma
+
+w.star = (1/delta) * solve(Sigma.bar) %*% mu.bar
+
+df = data.frame(100*cbind(t(P), mu.bar, w.star, w.star-w.eq/(1+tau)))
+row.names(df) = AssetNames
+names(df) =  c('P', "$\\bar{\\mu}$", '$w^*$','$w^* - \\frac{W_{eq}}{1+\\tau}$')
+kable(df, digits = 1, format="latex", booktabs=T, escape=F,
+      caption="Solution with View 1. P: view matrix, $\\bar{\\mu}$: ex-post expected return,
+      $w^*$: optimal weights, $\\frac{W_{eq}}{1+\\tau}$: scaled equilibrium weights") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+
+
+

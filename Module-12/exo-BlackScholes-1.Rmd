@@ -1,0 +1,86 @@
+---
+title: "Finance Quantitative"
+subtitle: "Modèle Black-Scholes"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(quantmod)
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(SuppDists)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(kableExtra)
+library(quadprog)
+```
+
+# Black-Scholes Model (1)
+  
+
+\begin{table}[ht]
+  \centering
+  \begin{tabular}{cc}
+    \toprule
+    Type & Call \\
+    Strike & 50 \\
+    Spot & 55 \\
+    Maturity & 3 months \\
+    Interest rate & 3\% \\
+    Dividend yield & 0\% \\
+    Volatility & .30 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Characteristics of an European option}
+  \label{tab:opt}
+\end{table}
+
+- Use the Black-Scholes model to price the option described in Table \ref{tab:opt}.
+- Assumes that a trader sells this option, and intends to delta-hedge her position. Compute the transactions that she will initiate to create her hedge portfolio.
+
+# Black-Scholes Model (2)
+
+On March 21, 2012, GOOG quotes \$636.91. Table \ref{tab:goog} provides the prices of selected options expiring on 18 Jan 2013:
+
+\begin{table}[ht]
+  \centering
+  \begin{tabular}{ccc}
+    \toprule
+    Type & Strike & Price \\
+    \midrule
+    Call  & 635 & 60.70 \\
+    Put   & 635 & 59.70 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Prices of options on GOOG}
+  \label{tab:goog}
+\end{table}
+
+Assume an interest rate of $1.0\%$. Google does not pay any dividend. 
+
+\begin{itemize}
+  \item Compute the implied volatility for the call and the put. Comment your results.
+    \item Use this result to price a call with strike 650.
+    \end{itemize}
+    

@@ -1,0 +1,283 @@
+---
+output:
+  pdf_document:
+    keep_tex: true
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+bibliography: ../library.bib
+csl: ../apa.csl
+
+title: "Le Modèle de Trenor-Black"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+email: "pa.henaff@gmail.com"
+
+fontfamily: mathpazo
+fontsize: 11pt
+header-includes:
+   - \linespread{1.05}
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{amsthm}
+   - \usepackage{xfrac}
+---
+
+```{r setup, include=FALSE, cache=F, message=F, warning=F, results="hide"}
+knitr::opts_chunk$set(cache=TRUE)
+knitr::opts_chunk$set(fig.path='figs/')
+knitr::opts_chunk$set(cache.path='_cache/')
+knitr::opts_chunk$set(warning=F, message=F)
+```
+
+\newcommand{\ones}{\mathbf{1}}
+\newcommand{\onesT}{\mathbf{1}^T}
+
+\newtheorem{thm}{Theorem}
+
+In this short note, we summarize the mathematical elements of the classical portfolio theory of Trenor-Black [@Treynor1973].
+
+Assets excess return is modeled by a single factor model:
+
+$$
+R_i = \alpha_i + \beta_i R_M + e_i
+$$
+
+where $\alpha_i$ is the idiosyncratic excess return of asset $i$, and $e_i \sim N(0, \sigma^2_i)$ is the specific risk.
+
+Recall two results from Markowitz and Sharpe:
+
+- The expression for the tangency portfolio:
+
+\begin{equation}
+w^* = \frac{\Sigma^{-1} \tilde{R}}{\onesT \Sigma^{-1} \tilde{R}}
+\label{eq:sharpe}
+\end{equation}
+
+- Given two assets, A and M, the allocation that maximizes the Sharpe ratio is given by:
+
+\begin{equation}
+w_A = \frac{R_A \sigma^2_M - R_M \sigma_A \sigma_M \rho_{AM}}{R_A \sigma^2_M + R_M \sigma^2_A - (R_A+R_M) \sigma_A \sigma_M \rho_{AM}}
+\label{eq:wA}
+\end{equation}
+
+# Calculation of the active portfolio
+
+The active portfolio is determined by the idiosyncratic excess return and the specific risk of each asset.
+
+The specific risks are assumed to be independent:
+
+$$
+\Sigma_A = \begin{bmatrix}
+\sigma^2(e_1) & & \\
+& \ddots & \\
+& & \sigma^2(e_n) \end{bmatrix}
+$$
+
+Using equation (\ref{eq:sharpe}), we get:
+
+$$
+w_{Ai} = \frac{\sfrac{\alpha_i}{\sigma^2_i}}{\sum \sfrac{\alpha_i}{\sigma^2_i} }
+$$
+
+So that the active portfolio has an excess return and variance given by:
+\begin{align*}
+R_A &= \alpha_A + \beta_A R_M \\
+\sigma^2_A &= \beta^2_A \sigma^2_M + \sigma^2(e_A)
+\end{align*}
+
+with
+\begin{align*}
+\alpha_A &= \sum w_{Ai} \alpha_i \\
+\beta_A &= \sum w_{Ai} \beta_i \\
+\sigma^2(e_A) &= \sum w^2_{Ai} \sigma^2(e_i)
+\end{align*}
+
+## Allocation of wealth between the active portfolio and the market portfolio
+
+A fraction $w_A$ of wealth is allocated to the active portfolio, and the balance $(1-w_A)$ to the market portfolio so as to maximize the Sharpe ratio of the global portfolio $xA + (1-x)M$.
+
+Using equation (\ref{eq:wA}) we get after some algebra:
+
+$$
+w_A = \frac{\alpha_A \sigma^2_M}{\alpha_A \sigma^2_M(1-\beta_A) + R_M \sigma^2(e_A)}
+$$
+
+# Separability of the Sharpe ratio in the active portfolio
+
+
+The first order condition for the optimal active portfolio is:
+
+\begin{equation}
+w_A = \lambda_A \Sigma^{-1} \alpha
+\label{eq:FOC-1}
+\end{equation}
+
+Substitute in the expression
+
+$$
+\alpha_A = w^T_A \alpha
+$$
+
+to get:
+
+\begin{equation}
+\frac{\alpha_A}{\lambda_A} = \alpha^T \Sigma^{-1} \alpha
+\label{eq:sep-1}
+\end{equation}
+
+We next get an expression for $\lambda_A$ in terms of known quantities:
+
+\begin{align*}
+\sigma^2(e_A) &= w^T_A \Sigma w_A \\
+&= \lambda^2_A \alpha^T \Sigma^{-1}\Sigma\Sigma^{-1} \alpha \\
+&= \lambda^2_A \alpha^T \Sigma^{-1} \alpha
+\end{align*}
+
+Therefore,
+
+\begin{align*}
+\frac{\sigma^2(e_A)}{\lambda^2_A} &= \alpha^T \Sigma^{-1} \alpha \\
+&= \frac{\alpha_A}{\lambda_A}
+\end{align*}
+
+Which yields:
+
+$$
+\lambda_A = \frac{\sigma^2(e_A)}{\alpha_A}
+$$
+
+Use this result in equation (\ref{eq:sep-1}) to get:
+
+\begin{align*}
+\frac{\alpha^2_A}{\sigma^2(e_A)} &= \alpha^T \Sigma^{-1} \alpha \\
+&= \sum_i \frac{\alpha^2_i}{\sigma^2(e_i)}
+\label{eq:sep-2}
+\end{align*}
+
+which shows that the square of the Sharpe ratio of the active portfolio is the sum of the squares of the Sharpe ratios of the assets forming that portfolio.
+
+
+# The Treynor-Black model in the notation of the 1973 paper and separability of the Sharpe ratio between the active and market portfolios
+
+The investment universe is composed of $n$ assets with asset-specific excess return:
+
+\begin{align}
+r_i &= \alpha_i + \beta_i r_M + e_i \ \ i=1, \ldots, n \\
+E(r_i) &= \alpha_i + \beta_i E(r_M) = \mu_i
+\label{eq:treynor-black-1}
+\end{align}
+
+and of the market asset itself. Let $w_i, i=1, \ldots, n$ be the investment in the assets with asset-specific excess returns, and $w_M$ the investment in the market asset.
+
+Treynor and Black restate this portfolio as an investment in $n+1$ assets, asset 1 to $n$ being only exposed to the specific risk, and the $n+1$ asset being only exposed to the market risk:
+
+$$
+w_{n+1} = w_M + \sum_{i=1}^n \beta_i w_i
+$$
+
+Note that these $n+1$ assets are independent. The mean and variance of the portfolio are:
+
+\begin{align}
+E(r_P) &= \sum_{i=1}^{n+1} w_i E(r_i) = \mu_P \\
+\sigma^2_P &= \sum_{i=1}^{n+1} w^2_i \sigma^2_i
+\end{align}
+
+
+As usual, maximize the Sharpe ratio by solving:
+
+$$
+\begin{aligned}
+    \mbox{min} \ \ & \frac{1}{2} w^T \Sigma w  \\
+    \mbox{s.t.} & \\
+        \mu^Tw & = \mu_P
+  \end{aligned}
+$$
+
+Keeping in mind that the assets are independent, the Lagrangian is:
+
+$$
+L(w, \lambda) = \sum_{i=1}^{n+1} w^2_i \sigma^2_i - 2\lambda \left( \sum_{i=1}^{n+1} w_i \mu_i - \mu_P \right)
+$$
+
+First order conditions for optimality yield:
+
+$$
+2 w_i \sigma^2_i - 2 \lambda \mu_i = 0 \ \ \ \ i=1, \ldots , n+1
+$$
+
+or,
+
+\begin{equation}
+w_i = \lambda \frac{\mu_i}{\sigma^2_i}
+\label{eq:wi}
+\end{equation}
+
+Substitute in (\ref{eq:treynor-black-1}) to get:
+
+\begin{align}
+\mu_P &= \lambda \sum_{i=1}^{n+1} \sfrac{\mu^2_i}{\sigma^2_i} \label{eq:lambda-1} \\
+\sigma^2_P &= \lambda^2 \sum_{i=1}^{n+1} \mu^2_i \sigma^2_i   \label{eq:lambda-2}
+\end{align}
+
+so that,
+
+$$
+\lambda = \frac{\sigma^2_P}{\mu_P}
+$$
+
+To summarize, the weights of the assets in the active portfolio are:
+
+$$
+w_i = \frac{\mu_i}{\mu_P} \frac{\sigma^2_P}{\sigma^2_i} \ \ \ i=1, \ldots, n
+$$
+
+To determine the investment in the market asset, $w_M$, recall that,
+
+\begin{align}
+\mu_{n+1} &= E(r_M) = \mu_M \\
+\sigma^2_{n+1} &= \sigma^2_M
+\end{align}
+
+Thus,
+
+\begin{align}
+w_{n+1} &= \sum_{i=1}^n w_i \beta_i + w_M \\
+&= \lambda \frac{\mu_M}{\sigma^2_M}
+\end{align}
+
+From equation (\ref{eq:wi}, we have:
+
+$$
+\sum_{i=1}^n w_i \beta_i = \lambda \sum_{i=1}^n \frac{\beta_i \mu_i}{\sigma^2_i}
+$$
+
+So that the investment in the market asset can be written as
+
+$$
+w_M = \lambda \left[ \frac{\mu_M}{\sigma^2_M} - \sum_{i=1}^n \frac{\beta_i \mu_i}{\sigma^2_i} \right]
+$$
+
+
+
+To establish the separability of the Sharpe ratio between the active and the market portfolios, combine equations (\ref{eq:lambda-1}) and (\ref{eq:lambda-2}) to get:
+
+$$
+\frac{\mu^2_P}{\sigma^2_P} = \sum_{i=1}^{n+1} \frac{\mu^2_i}{\sigma^2_i}
+$$
+
+Denoting $S_A, S_M, S_P$ the Sharpe ratios of, respectively, the active, market and overall portfolios, we can restate the previous equation as:
+
+\begin{align}
+S^2_P &= \sum_{i=1}^{n} \frac{\mu^2_i}{\sigma^2_i} + S^2_M \\
+&= \frac{\alpha^2_A}{\sigma^2_A + S^2_M} \\
+S^2_A + S^2_M
+\end{align}
+
+Treynor and Black call $\alpha_A = \sum_{i=1}^n w_i \alpha_i$ the "appraisal premium" and $\sigma^2_A = \sum_{i=1}^n w^2_i \sigma^2_i$ the "appraisal risk".
+
+
+# Bibliography
+
+
+

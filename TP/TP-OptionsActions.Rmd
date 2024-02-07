@@ -1,0 +1,144 @@
+---
+title: "Finance Quantitative"
+subtitle: "TP: Options sur Actions et Indices"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+    number_sections: true
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{eurosym}
+  - \usepackage{amsmath}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(fOptions)
+library(kableExtra)
+```
+
+
+# Smile Interpolation with the Vanna-Volga pricing model.
+
+Given the implied volatility at three strikes, we will use the Vanna-Volga pricing method to interpolate the
+volatility curve. Assume $r=0, b=0, T=1, \mbox{Spot} = 100$. The Black-Scholes volatility
+for three strikes is given below.
+
+```{r, echo=FALSE}
+# Benchmark data: (strike, volatility)
+VolData <- list(c(80, .32), c(100, .30), c(120, .315))
+tmp <- as.data.frame(VolData)
+row.names(tmp) <- c("Strike", "Volatility")
+colnames(tmp) <- NULL
+kable(tmp, booktabs=T) %>%
+  kable_styling(position = "center", latex_options = "HOLD_position")
+```
+
+## Getting started
+
+- Using the Rmetrics library (fOptions), verify that you know how to compute the price and the "greeks" of a vanilla option.
+- Identify or write a robust function to compute the implied volatility, given the price of a vanilla option.
+
+## Calculation steps
+
+
+### Write a robust function to calculate the implied volatility, given a strike.
+
+### Write functions to compute the risk indicators needed for the Vanna-Volga method. 
+
+You may use analytical expressions or a finite difference method.
+
+
+### Compute vectors of vega, vanna, volga for the three hedge instruments
+
+
+### Compute the risk indicators for a call option struck at 90.
+
+### Compute the Vanna-Volga price adjustment and the corresponding implied volatility.
+
+### Wrap the above logic in a function in order to
+Interpolate/extrapolate the vol curve from $K=70$ to $K=130$ and plot the result.
+
+
+# Pricing a digital call
+
+Recall that a digital call with strike $K$ pays one euro if $S_T \geq K$, and nothing otherwise.
+
+The volatility curve is given in the previous question. The objective is to price a digital call, maturity $T=1$, struck at $K=105$, using the same Vanna-Volga method as in the previous question. 
+
+
+## Data
+
+```{r, echo=TRUE}
+T <- 1
+Spot <- 100
+r <- 0
+b <- 0
+
+# Vol ATM
+sigma <- .30
+
+# strike
+Strike <- 105
+```
+
+### Write a function to compute the price of a digital call analytically.
+
+### Using the same reference instruments as in the previous question, compute the VV risk indicators of the hedge and of the digital call.
+
+
+### Compute the VV price correction for the digital call
+
+
+# Valorisation d'une option "chooser"
+
+Une option "chooser" de maturité $t_2$ et strike $K$ donne le droit au détenteur de choisir si l'option est un call ou un put, à un moment $t_1$ de la vie de l'option préalablement défini. A ce moment là, l'option "chooser" vaut $\max (C(K,t_2),P(K, t_2))$, où $C(K, t_2)$ ($P(K,t_2)$) est la valeur en $t_1$ d'un call (put) de strike $K$ de maturité $t_2$.   
+
+On se propose de valoriser cette options de deux manières: à l'aide d'un arbre trinomial d'une part, et d'autre part par une formule analytique.
+
+## Valorisation dans un arbre trinomial
+
+On construira un modèle trinomial par agrégation de deux pas d'un modèle binomial de type Jarrow-Rudd.
+
+On rappelle les paramètres du modèle binomial de Jarrow-Rudd, qui est charactérisé par des probabilités de transition $p=q=1/2$:
+$u = e^{\mu \Delta t + \sigma \sqrt{\Delta t}}$, 
+$d = e^{\mu \Delta t - \sigma \sqrt{\Delta t}}$.
+
+avec $\mu = (r-d) - \frac{1}{2} \sigma^2$.
+
+
+### Calculer les paramètres d'un arbre trinomial constitué par l'agrégation de deux pas de temps d'un arbre binomial de Jarrow-Rudd.
+
+
+### Construire un arbre de 200 pas, maturité 1 an pour le processus log-normal
+
+$$
+dS_t = r dt + \sigma dW
+$$
+avec les paramètres suivants:
+
+```{r}
+data = as.matrix(c(100, .20, .02), nrows=3)
+rownames(data) = c("$S_0$", "$\\sigma$", "$r$")
+knitr::kable(data, format="latex", booktabs=TRUE, escape=FALSE)
+```
+
+
+Déterminez une manière parcimonieuse de représenter cet arbre, adaptée à la résolution de la question suivante.
+
+Vérifiez la construction de l'arbre en valorisant des instruments simples et en les comparant à des valeurs analytiques.
+
+### Valoriser l'option "chooser" dans l'arbre trinomial
+
+
+## Montrer que l'option "chooser"peut être répliquée par un portefeuille statique, et calculer sa valeur analytiquement. Comparer vos deux estimations.
+

@@ -1,0 +1,46 @@
+---
+title: "Finance Quantitative"
+subtitle: |
+  | Méthode de Monte-Carlo
+  | et fond à formule
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+    number_sections: true
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(xtable)
+```
+
+Dans cet exercice, on se propose d'étudier le fond à formule dont la description se trouve dans le dossier.
+
+
+# Questions
+
+## Ecrire une fonction qui calcule le payoff du fond, en fonction d'un scenario $S_t$.
+## Ecrire une fonction de generation des chemins.
+
+
+## Vérifiez votre calcul en valorisant une option Européenne.
+
+## Valoriser le Fond à Formule.
+
+
+## Calculer la valeur du fond pour des volatilité de 20% à 40%
+
+Rechercher quelle était la volatilité de l'indice (VSTOXX) à l'époque de l'émission. Conclure.
+

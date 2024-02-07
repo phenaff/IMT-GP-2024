@@ -1,0 +1,28 @@
+# Benders decomposition
+
+Feasibility cut example
+
+Stage 1 subproblem
+
+```{r}
+y = 3
+cvec = c(0, rep(1,6))
+bvec = c(1, y-3, -y-3)
+Amat <- matrix(0, nrow=3, ncol=7)
+Amat[1,1:3] = c(1,1,-1)
+Amat[2,c(1,4,5)] = c(-1,-1,1)
+Amat[3, c(1,6,7)] = c(-1, -1, 1)
+
+res = solveLP(cvec, -bvec, -Amat, maximum=FALSE)
+print(res)
+```
+
+Dual
+
+```{r}
+cvec.dual = bvec
+bvec.dual = cvec
+Amat.dual = t(Amat)
+
+res.dual = solveLP(cvec.dual, bvec.dual, Amat.dual, maximum=TRUE)
+```

@@ -1,0 +1,99 @@
+---
+title: "Finance Quantitative"
+subtitle: "Exercice: Modèle de Treynor-Black"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+fontfamily: mathpazo
+fontsize: 11pt
+header-includes:
+   - \linespread{1.05}
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{amsthm}
+   - \usepackage{xfrac}
+   - \usepackage{booktabs}
+   - \usepackage{tikz}
+   - \usepackage{eurosym}
+   - \newcommand{\ones}{\mathbf{1}}
+   - \newcommand{\onesT}{\mathbf{1}^T}
+   - \newtheorem{thm}{Theorem}
+   - \DeclareMathOperator{\Var}{Var}
+   - \DeclareMathOperator{\E}{E}
+   - \DeclareMathOperator{\Cov}{Cov}
+   - \usepackage{tikz}
+---
+
+```{r setup, include=FALSE, cache=F, message=F, warning=F, results="hide"}
+knitr::opts_chunk$set(cache=TRUE)
+knitr::opts_chunk$set(fig.path='figs/')
+knitr::opts_chunk$set(cache.path='_cache/')
+knitr::opts_chunk$set(warning=F, message=F)
+
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(latex2exp)
+library(xts)
+library(PerformanceAnalytics)
+
+get.src.folder <- function() {
+   path.expand("../GP/src")
+ }
+ 
+ get.data.folder <- function() {
+   path.expand("../GP/data")
+ }
+
+ source(file.path(get.src.folder(), 'utils.R'))
+ source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+Dans cet exercice, on considère la première étape du
+modèle de Treynor-Black, c'est à dire l'estimation du terme $\alpha$ du modèle à un facteur de Sharpe.
+
+
+# Données
+
+## Séries de rendement mensuel pour 11 valeurs:
+
+```{r, eval=TRUE, echo=TRUE, warning=FALSE}
+monthly.ret.file <- file.path(get.data.folder(), "monthly.ret.rda")
+load(monthly.ret.file)
+```
+
+On considère divers indices de marché:
+
+- le S&P 500
+- l'indice NASDAQ QQQQ
+- un ETF "World Market"
+
+
+```{r, echo=TRUE, warning=FALSE}
+VT.series.file <- file.path(get.data.folder(), "ret.VT.rda")
+load(VT.series.file)
+```
+
+## Rendement moyen:
+
+```{r, echo=TRUE}
+monthly.ret <- merge.xts(monthly.ret, world.index.ret, join="inner")
+kable(colMeans(monthly.ret), "latex", escape=FALSE, col.names=c("$r$"), booktabs=TRUE, caption="Rendement moyen mensuel")
+```
+
+# Questions
+
+## Modèle à un facteur de Sharpe
+
+Choisir un titre et un indice de marché. Estimer le modèle de Sharpe sur une période de 48 mois.
+
+
+Effectuer le même calcul sur l'ensemble des actions contenues dans le jeu de données.
+
+Faire le même calcul sur une fenêtre glissante de 48 mois et aficher une série de $\alpha$. Utiliser la fonction \texttt{rollapply} de la librarie \texttt{zoo}.
+
