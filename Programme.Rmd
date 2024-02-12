@@ -145,7 +145,11 @@ File -> New Project -> Existing Directory. Dans la console R, vous devriez voir 
 ... One or more packages recorded in the lockfile are not installed
 ````
 
-- Chargez les "packages" manquants avec
+- Chargez les "packages" manquants de GitHub et CRAN/R-Forge avec
+
+````markdown
+> renv.install("phenaff/R-package-empfin")
+````
 
 ````markdown
 > renv::install()
@@ -153,19 +157,26 @@ File -> New Project -> Existing Directory. Dans la console R, vous devriez voir 
 
 - L'installation de tous les "packages" peut prendre un temps certain!
 
-- Utiliser renv::install() pour ajouter des "packages".
+- Utiliser renv::install() pour ajouter des "packages" supplémentaires, puis mettre à jour la liste des packages (renv.lock) avec:
+
+````markdown
+> renv::snapshot()
+````
+
+
 
 ## Verification
 
-Vérifiez que l'installation est complète en éxécutant quelques fichiers .Rmd.
+Vérifiez que l'installation est complète en exécutant quelques fichiers .Rmd.
+
+<!---
 Vous pouvez même recréer l'ensemble du projet avec
 
 ```{bash, eval=FALSE}
 make clean
 make pdf
 ```
-
-
+-->
 
 
 # Programme
