@@ -1,0 +1,194 @@
+---
+title: "Gestion de Portefeuille"
+subtitle: "Ex-2: Modèle Moyenne-Variance (Solution)"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    number_sections: true
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+
+bibliography: ../library.bib
+csl: ../apa.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(quantmod)
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(SuppDists)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(kableExtra)
+library(quadprog)
+
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+# Données
+
+## Séries de rendement quatidien pour 11 valeurs:
+
+```{r, eval=TRUE, echo=TRUE, warning=FALSE}
+daily.ret.file <- file.path(get.data.folder(), "daily.ret.rda")
+load(daily.ret.file)
+kable(table.Stats(daily.ret), "latex", booktabs=T) %>% kable_styling(latex_options="scale_down")
+```
+
+## Rendement annuel moyen:
+
+```{r, echo=TRUE}
+kable(252*100*colMeans(daily.ret), "latex", booktabs=T, digits=1, col.names=c("Rendement (%)"),
+      caption="Rendement annuel moyen")
+```
+
+## Matrice de corrélation des rendements:
+
+```{r, echo=TRUE}
+correl <- cor(daily.ret)
+correl[lower.tri(correl)] <- NA
+```
+
+```{r, echo=FALSE}
+options(knitr.kable.NA = '')
+kable(correl, "latex", booktabs=T, digits=2, caption="Corrélation des rendements quotidiens") %>%
+kable_styling(latex_options=c("scale_down", "HOLD_position"))
+```
+
+## Modèle Moyenne Variance
+
+Le portefeuille de variance minimale formé à l'aide des 11 titres ci-dessus:
+
+```{r, echo=TRUE}
+cov.all <- cov(daily.ret)
+n <- ncol(daily.ret)
+dvec <- rep(0, n)
+Amat <- matrix(1, nrow=n, ncol=1)
+bvec <- 1
+sol <- solve.QP(cov.all, dvec, Amat, bvec, meq=1)
+```
+
+```{r solution-0, echo=FALSE}
+tmp <- data.frame(weight=100*sol$solution, row.names=names(daily.ret))
+kable(tmp, "latex", booktabs=T, digits=2, caption="Solution Variance Minimale (\\%)") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+# Questions
+
+## Modifier le programme ci-dessus pour imposer des poids positifs:
+
+```{r, echo=TRUE}
+A.neq <- diag(n)
+A.eq <- matrix(1, nrow=n, ncol=1)
+Amat <- cbind(A.eq, A.neq)
+bvec <- c(1, rep(0,n))
+sol <- solve.QP(cov.all, dvec, Amat, bvec, meq=1)
+```
+
+```{r solution-1, echo=FALSE}
+tmp <- data.frame(weight= 100*sol$solution, row.names=names(daily.ret))
+tmp <- subset(tmp, weight>0.1)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Solution Variance Minimale, poids positifs") %>%
+kable_styling(latex_options="HOLD_position")
+```
+## Calculer le portefeuille risqué qui procure un rendement espéré de 13% par an.
+
+Solution numérique:
+
+```{r mv-1, echo=TRUE}
+mu.star = .13
+A.eq.1 <- matrix(1, nrow=n, ncol=1)
+A.eq.2 <- matrix(252*colMeans(daily.ret), nrow=n, ncol=1)
+Amat <- cbind(A.eq.1, A.eq.2)
+bvec <- c(1, mu.star)
+sol <- solve.QP(cov.all, dvec, Amat, bvec, meq=1)
+```
+
+```{r solution-2, echo=FALSE}
+tmp <- data.frame(weight=100*sol$solution, row.names=names(daily.ret))
+tmp <- subset(tmp, abs(weight)>0.1)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Solution Numérique Variance Minimale, espérance de Rdt=13\\%") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+Solution analytique, en utilisant la notation de la note de cours:
+
+```{r mv-2, echo=TRUE}
+Sigma <- cov.all
+A.1 <- cbind(Sigma, -Amat)
+A.2 <- cbind(t(Amat), diag(0,2))
+A <- rbind(A.1, A.2)
+b <- c(rep(0, n), 1, mu.star)
+sol <- solve(A, b)
+```
+
+```{r solution-21, echo=FALSE}
+tmp <- data.frame(weight=100*sol[1:n], row.names=names(daily.ret))
+tmp <- subset(tmp, abs(weight)>0.1)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Solution Analytique Variance Minimale, espérance de Rdt=13\\%") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+## Si le taux sans risque est de 4%, quel est le portefeuille tangent correspondant?
+
+```{r mv-3, echo=TRUE}
+r.f <- .04
+mu <- matrix(252*colMeans(daily.ret), nrow=n, ncol=1)
+w.nom <- solve(Sigma, mu-r.f)
+w.den <- sum(w.nom)
+w.t <- w.nom/sum(w.nom)
+r.bar = sum(w.t * mu)
+```
+
+```{r solution-31, echo=FALSE}
+tmp <- data.frame(weight=100*w.t, row.names=names(daily.ret))
+tmp <- subset(tmp, abs(weight)>0.1)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Portefeuille tangent Rf=4\\%. ") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+On peut vérifier que le portefeuille tangent est sur la frontière efficiente en résolvant le modèle MV pour l'espérance de rendement calculé.
+
+
+```{r mv-4, echo=TRUE}
+mu.star = r.bar
+A.eq.1 <- matrix(1, nrow=n, ncol=1)
+A.eq.2 <- matrix(252*colMeans(daily.ret), nrow=n, ncol=1)
+Amat <- cbind(A.eq.1, A.eq.2)
+bvec <- c(1, mu.star)
+sol <- solve.QP(cov.all, dvec, Amat, bvec, meq=1)
+```
+
+```{r solution-4, echo=FALSE}
+tmp <- data.frame(weight=100*sol$solution, row.names=names(daily.ret))
+tmp <- subset(tmp, abs(weight)>0.1)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Solution Numérique Variance Minimale, espérance de Rdt du portefeuille tangent") %>%
+kable_styling(latex_options="HOLD_position")
+```
+

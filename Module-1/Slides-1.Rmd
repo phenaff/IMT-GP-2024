@@ -33,7 +33,7 @@ bibliography: ../library.bib
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-```{r load-libraries}
+```{r load-libraries, message=FALSE}
 library(quantmod)
 library(xts)
 library(hornpa)
