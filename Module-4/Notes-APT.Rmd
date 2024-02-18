@@ -229,7 +229,7 @@ On construit $(N-K)$ portefeuilles $v_i, i=1, \ldots, N-K$, orthogonaux entre eu
 v = \frac{1}{N-K} \sum_{i=1}^{N-K} v_i
 \end{align}
 
-Soit $a = \max |w_i|, i=1, \ldots, N-K$, calculons la variance du rendement de ce portefeuille moyen:
+Soit $a = \max |v_i|, i=1, \ldots, N-K$, calculons la variance du rendement de ce portefeuille moyen:
 
 \begin{align}
 \Var{V^Tr} &= \Var(v^TBf + v^T \epsilon) \\
@@ -270,7 +270,7 @@ Ce résultat a inspiré de nombreuses stratégies de mise en oeuvre; on peut mê
 
 ## Modèles factoriels implicites ou statistiques
 
-Soit $\\hat{Sigma}$ l'estimation de la matrice de covariance et $X_k, k=1, \ldots, K$ les vecteurs propres retenus.
+Soit $\hat{Sigma}$ l'estimation de la matrice de covariance et $X_k, k=1, \ldots, K$ les vecteurs propres retenus.
 La série temporelle de réalisation du facteur $k$ est:
 $$
 \hat{f}_{kt} = X^T_k R_t
@@ -331,20 +331,23 @@ Selon cette approche, les $\beta$ sont des données observables, spécifiques au
 $$
 R_t = \beta f_t + \epsilon_t
 $$
-Si le facteur est le secteur industriel, les $\beta$ sont de la forme
-\begin{align}
-\beta_{ik} &= 1 \text{si le titre} i \text{appartient à la catégorie} k \\
-&= 0 \text{autrement}
-\end{align}
+Par exemple, si le facteur est le secteur industriel, les $\beta$ sont de la forme
+\begin{align*}
+\beta_{ik} &= 1 \text{si le titre} \   i \  \text{appartient à la catégorie} \ k \\
+&= 0 \ \text{autrement}
+\end{align*}
 
 ### Modèle Fama-French
 
-Ce modèle est également largement utilisé dans l'industrie.
+Ce modèle est également largement utilisé dans l'industrie. Le l'excès de rendement est
+fonction de trois facteurs:
 
 
 $$
 r_{i,t} = \alpha_i + \beta_{i,M} R_{M,t} + \beta_{i, SMB} SMB_t + \beta_{i, HML} HML_t + e_{i,t}
 $$
+
+avec:
 
 \begin{description}
 \item[$r_i$] Excédent de rendement, titre $i$
@@ -353,7 +356,7 @@ $$
 \item[$HML$] "High Minus Low": Facteur Valorisation
 \end{description}
 
-Ici, contrairement à l'approche BARRA, les rendements des facteurs sont connus, et les $\beta$ sont estimés par regression, en utilisant les series de rendement des titres.
+Ici, contrairement à l'approche BARRA, les rendements des facteurs sont connus, et les $\beta$ sont estimés par regression, en utilisant les séries de rendement des titres.
 
 Les facteurs sont des portefeuilles à coût nul définis comme suit: on utilise deux caractéristiques pour définir une segmentation des titres:
 

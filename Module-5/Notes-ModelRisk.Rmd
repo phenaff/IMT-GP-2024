@@ -1,0 +1,136 @@
+---
+output:
+  pdf_document:
+    keep_tex: true
+    fig_caption: yes
+    latex_engine: pdflatex
+    number_sections: true
+geometry: margin=1in
+
+bibliography: ../library.bib
+csl: ../apa.csl
+
+title: "Risque de Modélisation"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+
+email: "pa.henaff@gmail.com"
+
+fontfamily: mathpazo
+fontsize: 11pt
+header-includes:
+   - \linespread{1.05}
+   - \usepackage[utf8]{inputenc}
+   - \usepackage{amsthm}
+   - \usepackage{xfrac}
+   - \usepackage{booktabs}
+   - \usepackage{tikz}
+   - \usepackage{eurosym}
+   - \newcommand{\ones}{\mathbf{1}}
+   - \newcommand{\onesT}{\mathbf{1}^T}
+   - \newtheorem{thm}{Theorem}
+   - \DeclareMathOperator{\Var}{Var}
+   - \DeclareMathOperator{\E}{E}
+   - \DeclareMathOperator{\Cov}{Cov}
+   - \usepackage{tikz}
+---
+
+```{r setup, include=FALSE, cache=F, message=F, warning=F, results="hide"}
+knitr::opts_chunk$set(cache=TRUE)
+knitr::opts_chunk$set(fig.path='figs/')
+knitr::opts_chunk$set(cache.path='_cache/')
+knitr::opts_chunk$set(warning=F, message=F)
+
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(latex2exp)
+
+get.src.folder <- function() {
+   path.expand("../GP/src")
+ }
+
+ get.data.folder <- function() {
+   path.expand("../GP/data")
+ }
+
+ source(file.path(get.src.folder(), 'utils.R'))
+ source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+# Effets pervers de l'abondance de données
+
+Rappel:
+
+- Erreur de type I (faux positif, probabilité $\alpha$): on selectionne un portefeuille qui devrait être rejeté.
+
+- Erreur de type II (faux négatif, probabilité $\beta$): on rejette un portefeuille qui en fait répond aux critères.
+
+Pour un investisseur adverse au risque, on essaie d'éviter les erreurs de type I ($alpha = .05$, )
+
+## Biais des tests multiples
+
+On teste 20 variantes d'une stratégie de construction de portefeuille, en faisant varier divers hyper-paramètres. Chaque stratégie est testée à un niveau de significativité $\alpha=0.5$. Quelle est la probabilité de trouver une bonne stratégie parmi les 20 candidats?
+
+\begin{align*}
+P(\mbox{au moins une bonne stratégie}) &= 1-P(\mbox{aucune bonne stratégie}) \\
+&= 1 - (1-0.05)^{20} \\
+&\approx 0.64
+\end{align*}
+
+En résumé, avec 20 variantes d'une stratégie, nous avons 64\% de chance d'en trouver une bonne (au niveau de significativité $\alpha$), même si aucun candidat n'est en fait significatif. La correction de Bonferroni ajuste $\alpha^* = \alpha/n$ pour prendre en compte le fait que $n$ tests ont été menés.
+
+Example de ce biais: le "zoo des facteurs" en finance quantitative.
+
+
+## Biais de sélection
+
+Comme les résultats négatifs ne sont pas publiés, on observe un échantillon biaisé. Ce biais ce manifeste sous diverses formes:
+
+- publications par les analystes financiers de "backtesting"favorables
+
+- publications dans les revues académiques de résultats positifs principalement
+
+- les indices ne représentent, par définition, que les fonds qui survivent
+
+
+## Surapprentissage (Backtest overfitting) @bailey2014
+
+> "In this paper we shall show that it takes a relatively small number of
+>  trials to identify an investment strategy with a spuriously high
+>  backtested performance."
+>
+
+
+Si l'excès de rendement d'une stratégie est $r_t \sim \mathcal{N}(\mu,\,\sigma^{2})$, le ration de Sharpe annualisé est
+
+$$
+SR = \frac{\mu}{\sigma} \sqrt{q}
+$$
+avec $q$: le nombre d'intervalles par an. Soit $y$ le nombre d'années utilisées pour estimer $SR$, la distribution de $SR$ converge vers une loi normale:
+
+$$
+\hat{SR} \sim \mathcal{N}(SR, \frac{1+\frac{SR^2}{2q}}{y})
+$$
+
+Proposition (@bailey2014):
+
+Soit $x_n \sim \mathcal{N}(0,1), n = 1, \ldots, N$ un échantillon IID tiré d'une loi normale centré réduite. L'éspérance du maximum
+
+$$
+E[\max x_n] \approx \sqrt{2 \ln(N)}
+$$
+
+
+Il est donc relativement aisé de trouver une stratégie avec un $\hat{SR}$ significatif "in-sample" alors  que le $SR$ réel est nul. Imaginons une stratégie dont le $SR$ est nul. En testant 10 variantes de cette stratégie,
+on devrait en trouver une avec un $\hat{SR}$ de 1.57.
+
+On en déduit aussi que la longueur du backtest nécessaire est fonction du nombre de stratégies que l'on teste. Pour donner un ordre de grandeur, avec 100 variantes, il faut utiliser au minimum un backtest de 5 ans, et avec 700 variantes, il faut environ 10 ans de backtest.
+
+# Modèle Moyenne Variance
+
+- Fragilité des estimations des l'espérances de rendement
+
+- Rang de la matrice de covariance, effet des valeurs propres $\lambda_i \approx 0$.
+
+
