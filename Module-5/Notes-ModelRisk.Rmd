@@ -127,10 +127,11 @@ on devrait en trouver une avec un $\hat{SR}$ de 1.57.
 
 On en déduit aussi que la longueur du backtest nécessaire est fonction du nombre de stratégies que l'on teste. Pour donner un ordre de grandeur, avec 100 variantes, il faut utiliser au minimum un backtest de 5 ans, et avec 700 variantes, il faut environ 10 ans de backtest.
 
-# Modèle Moyenne Variance
+# Problèmes spécifiques au modèle moyenne-variance (voir slides)
 
 - Fragilité des estimations des l'espérances de rendement
 
 - Rang de la matrice de covariance, effet des valeurs propres $\lambda_i \approx 0$.
 
+# Problèmes spécifiques au modèles factoriels
 
