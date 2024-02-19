@@ -98,9 +98,9 @@ Enfin, vous êtes fortement encouragés à profiter des vidéo-conférences pour
 \importantbox{
 Les LLM sont aujourd'hui incontournables. Vous êtes donc encouragés à utiliser toutes les ressources dont vous disposez (Bard, Github Copilot, etc). Dans vos rendus de TP:
 
-- indiquez les "prompts" que vous avez utilisé
+- indiquez les "prompts" que vous avez utilisés
 
-- identifiez clairement le LLM utilisé et le code fourni par ce LLM
+- identifiez clairement le LLM utilisé et la solution fournie par ce LLM
 
 - évaluez systématiquement la qualité du code fourni.
 }

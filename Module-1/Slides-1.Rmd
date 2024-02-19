@@ -283,7 +283,7 @@ tickers <- get.tickers(folder)[1:150]
 ts.all <- get.all.ts(folder, tickers, dt.start = dmy('01Mar2007'), combine = TRUE)
 ```
 
-```{r, cor-1, echo=FALSE}
+```{r, cor-1, echo=FALSE, message=FALSE}
 nb.ev = 6
 nb.obs <- 252
 
