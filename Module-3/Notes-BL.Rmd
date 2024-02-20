@@ -89,7 +89,7 @@ Consider the linear model
 $$
 Y = X \beta + E
 $$
-with $\textrm{Cov}(E|X) = \Omega = \sigma^2V$
+with $\textrm{Cov}(E|X) = \Omega$
 
 $$
 \hat{\beta} = (X^T \Omega^{-1}X)^{-1} X^T \Omega^{-1} Y
@@ -97,11 +97,11 @@ $$
 
 Proof:
 
-Set $\Omega = K^TK$ and define $Z=K^{-1}Y, B=K^{-1}X, g=K^{-1}\epsilon$, the linear model becomes:
+Set $\Omega = K^TK$ and define $Z=K^{-1}Y, B=K^{-1}X, G=K^{-1}E$, the linear model becomes:
 $$
-Z = B\beta + g
+Z = B\beta + G
 $$
-with $E(g)=0$ and $V(g)=\sigma^2I$. Applying OLS to this model yields the desired result.
+with $E(G)=0$ and $V(G)=I$. Applying OLS to this model yields the desired result.
 
 ## Theil's estimatiom method for posterior distribution
 
@@ -170,7 +170,7 @@ Consequence: the posterior distribution of returns is
 $$
 r \sim \mathcal{N}(\mu^*, \Sigma^*)
 $$
-with $\Sigma^* = \Sigma + M^{-1}$.
+with $\Sigma^* = \Sigma + M^{-1}$. Remember that the expected return is a random variable, and the return is another random variable.
 
 # Portfolio optimization
 

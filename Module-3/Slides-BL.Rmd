@@ -149,6 +149,27 @@ $$
 P \mu = Q + \epsilon^{(v)}
 $$
 
+## Conséquence
+
+Distribution normale *ex-post* de l’espérance de rendement:
+
+$$
+\mu \sim \mathcal{N}(\mu^*, M^{-1})
+$$
+$$
+\mu^* = \left[ (\tau \Sigma)^{-1} + P^T\Omega^{-1} P \right]^{-1} \left[ (\tau \Sigma)^{-1} \Pi + P^T\Omega^{-1} Q \right]
+$$
+
+$$
+M^{-1} = \left[ (\tau \Sigma)^{-1} + P^T\Omega^{-1} P \right]^{-1}
+$$
+
+
+## Distribution *ex-post* du rendement:
+
+$$
+r \sim \mathcal{N}(\mu^*, \Sigma + M^{-1})
+$$
 
 ## Exemple
 
