@@ -1,0 +1,180 @@
+---
+title: "Gestion de Portefeuille"
+subtitle: 'Ex 7: Risk Parity and Risk Budgeting'
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: yes
+    number_sections: true
+fig_caption: yes
+latex_engine: pdflatex
+word_document: default
+geometry: margin=1in
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{amsmath}
+  - \usepackage{amsfonts}
+  - \usepackage{amssymb}
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(NlcOptim)
+library(kableExtra)
+library(nleqslv)
+```
+
+# Données
+
+On utilisera les données de l'article de Litterman et He.
+
+```{r, echo=T}
+spl <- function (
+  s,      # input string
+  delim = ',' # delimiter
+) {
+  unlist(strsplit(s,delim))
+}
+
+
+ data =
+'1,0.4880,0.4780,0.5150,0.4390,0.5120,0.4910
+ 0.4880,1,0.6640,0.6550,0.3100,0.6080,0.7790
+ 0.4780,0.6640,1,0.8610,0.3550,0.7830,0.6680
+ 0.5150,0.6550,0.8610,1,0.3540,0.7770,0.6530
+ 0.4390,0.3100,0.3550,0.3540,1,0.4050,0.3060
+ 0.5120,0.6080,0.7830,0.7770,0.4050,1,0.6520
+ 0.4910,0.7790,0.6680,0.6530,0.3060,0.6520,1'
+
+  Corrmat = matrix( as.double(spl( gsub('\n', ',', data), ',')),
+                    nrow = length(spl(data, '\n')), byrow=TRUE)
+
+  stdevs = c(16.0, 20.3, 24.8, 27.1, 21.0,  20.0, 18.7)/100
+  w.eq = c(1.6, 2.2, 5.2, 5.5, 11.6, 12.4, 61.5)/100
+  # Prior covariance of returns
+  Sigma = Corrmat * (stdevs %*% t(stdevs))
+```
+
+Rendements d'équilibre
+
+```{r, echo=T}
+# risk aversion parameter
+delta = 2.5
+Pi = delta * Sigma %*% w.eq
+```
+
+
+```{r}
+asset.names = c('Australia','Canada','France','Germany','Japan','UK','USA')
+Table2 = cbind(asset.names, round(cbind(stdevs, w.eq, Pi) * 100,1))
+colnames(Table2) = c('Assets','Std Dev','Weq','PI')
+kable(Table2, format='latex', booktabs=T)
+```
+
+# Questions
+
+## Calculer une allocation telle que les contributions au risque du portefeuille sont identiques pour tous les titres (optimisation non-linéaire).
+
+
+On doit avoir:
+
+$$
+\mbox{min}_w \sum_i (CR_i - CR_{i-1})^2
+$$
+
+Définissez la fonction objectif et la matrice de contraintes, puis utilisez solnl pour
+obtenir la solution.
+
+
+```{r, echo=TRUE}
+f.obj <- function(w) {
+  CR <- w * Sigma %*% w
+  sum(diff(CR) ** 2)*1000
+}
+
+n <- length(asset.names)
+Aeq <- matrix(rep(1,n), nrow=1)
+Beq <- 1
+lb <- rep(0, n)
+ub <- rep(1,n)
+w.0 <- rep(1/n, n)
+
+res.optim <- solnl(X=w.0, objfun=f.obj, Aeq=Aeq, Beq=Beq, lb=lb,
+                   ub=ub)
+```
+ 
+Solution:
+
+```{r, echo=FALSE}
+tmp <- data.frame(weight=res.optim$par*100, row.names=asset.names)
+tmp <- subset(tmp, abs(weight)>0.1)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Portefeuille Risk Parity") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+## Solution analytique (méthode de Newton).
+
+
+Condition nécessaire pour avoir des contributions homogènes au risque:
+
+$$
+w_i \frac{\partial \sigma_P}{\partial w_i} = w_j \frac{\partial \sigma_P}{\partial w_j} = \lambda
+$$
+Soit $1/w = [1/w_1, \ldots, 1/w_n]$, la condition s'exprime, en omettant le dénominateur:
+
+$$
+\Sigma w = \lambda \times 1/w
+$$
+On définit la fonction $F(w, \lambda)$:
+
+$$
+F(w, \lambda) = 
+\begin{bmatrix}
+\Sigma w - \lambda \times 1/w \\
+1^T w - 1
+\end{bmatrix}
+$$
+et on recherche $w^*, \lambda^*$ tels que $F(w^*, \lambda^*) = 0$.
+
+```{r, echo = TRUE}
+f.obj <- function(x) {
+  n <- length(x)
+  w <- matrix(x[1:(n-1)], ncol=1)
+  lambda <- x[n]
+  res.1 <- Sigma %*% w - lambda * 1/w
+  res.2 <- sum(w) - 1
+  as.vector(rbind(res.1, res.2))
+}
+
+x.0 <- c(rep(1/n, n), .1)
+res.newton = nleqslv(x.0, f.obj)
+```
+
+La solution est:
+
+```{r, echo=FALSE}
+tmp <- data.frame(weight=res.newton$x[1:n]*100, row.names=asset.names)
+tmp <- subset(tmp, abs(weight)>0.1)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Portefeuille Risk Parity (Newton)") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+## Vérification avec la librairie RiskParityPortfolio
+
+```{r, echo=TRUE}
+library(riskParityPortfolio)
+rpp_vanilla <- riskParityPortfolio(Sigma)
+```
+
+```{r, echo=FALSE}
+tmp <- data.frame(weight=rpp_vanilla$w*100, row.names=asset.names)
+kable(tmp, "latex", booktabs=T, digits=2, caption="Portefeuille Risk Parity") %>%
+kable_styling(latex_options="HOLD_position")
+```
+
+```{r, echo=FALSE}
+w_all <- cbind("EWP" = rep(1/nrow(Sigma), nrow(Sigma)),
+               "RPP (vanilla)" = rpp_vanilla$w)
+               
+barplotPortfolioRisk(w_all, Sigma)
+```

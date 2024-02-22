@@ -79,6 +79,7 @@ kable(Table2, format='latex', booktabs=T)
 Formulez le problème d'optimisation non-linéaire correspondant. Définissez la fonction objectif et la matrice de contraintes, puis utilisez solnl pour
 obtenir la solution.
 
+
 ## Exprimer les conditions d'optimalité du problème précédent, et résoudre directement ces équations par la méthode de Newton.
 
 

@@ -195,7 +195,7 @@ Rendement de (1/2 IBM - MSFT + 1/2 DELL) = 6% + terme d'erreur
 
 \tiny
 ```{r, echo=TRUE, message=FALSE}
-sd <- .02
+sd <- .05
 pickMatrix <- matrix(c(1/2, -1, 1/2, rep(0, 3)),
                      nrow = 1, ncol = 6 )
 views <- BLViews(P = pickMatrix, q = 0.06,

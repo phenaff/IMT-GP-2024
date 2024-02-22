@@ -162,7 +162,7 @@ tickers <- get.tickers(folder)[1:200]
 ts.all <- get.all.ts(folder, tickers, dt.start = dmy('01Mar2007'), combine = TRUE)
 ```
 
-```{r, cor-3, echo=FALSE}
+```{r, cor-3, echo=FALSE, message=FALSE, warning=FALSE}
 nb.obs <- 252
 
 dt.start <- dmy("01Aug2009")
@@ -176,7 +176,7 @@ ev <- res.pca.1$sdev
 ```
 
 ```{r, cor-4, echo=FALSE, fig.height=5}
-barplot(ev, main="PCs of 200 NASDAQ stocks, August 2009", names.arg=seq_along(ev), ylim=range(pretty(c(0, ev))))
+barplot(ev, main="Valeurs propres (NASDAQ 8/2009)", names.arg=seq_along(ev), ylim=range(pretty(c(0, ev))))
 ```
 
 ## Interprétation de $\mathcal{I}$  (I)
@@ -206,10 +206,12 @@ Ce qui donne une expression simple pour $w_i$, le poid de l'actif $i$ dans le po
 $$
  w_i(\gamma) = \gamma \frac{\mu_i - \beta_i^T \mu_i^{(-i)}}{s_i^2}
 $$
+avec $s_i^2$: variance du résidu du modèle de couverture du titre $i$.
+
 
 ## Conséquences pour le portefeuille optimal MV
 
-- Plus l'actif $i$ est bien répliqué par les autres actifs, plus forte est la pondération dans le portefeuille MV
+- Plus l'actif $i$ est bien répliqué par les autres actifs ($s_i$ petit), plus forte est la pondération dans le portefeuille MV
 - Le signe de $w_i$ est déterminé par la différence entre le rendement espéré du titre et de celui du portefeuille de couverture.
 
 le portefeuille optimal MV de Markowitz ne procure pas une diversification des facteurs de risque, mais réalise une concentration du risque sur les facteurs d'arbitrage (sur les actifs qui peuvent être très bien répliqués par d'autres actifs de l'univers des titres)

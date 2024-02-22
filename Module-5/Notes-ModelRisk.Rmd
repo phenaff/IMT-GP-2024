@@ -70,7 +70,7 @@ Pour un investisseur adverse au risque, on essaie d'éviter les erreurs de type 
 
 ## Biais des tests multiples
 
-On teste 20 variantes d'une stratégie de construction de portefeuille, en faisant varier divers hyper-paramètres. Chaque stratégie est testée à un niveau de significativité $\alpha=0.5$. Quelle est la probabilité de trouver une bonne stratégie parmi les 20 candidats?
+On teste 20 variantes d'une stratégie de construction de portefeuille, en faisant varier divers hyper-paramètres. Chaque stratégie est testée à un niveau de significativité $\alpha=0.05$. Quelle est la probabilité de trouver une bonne stratégie parmi les 20 candidats?
 
 \begin{align*}
 P(\mbox{au moins une bonne stratégie}) &= 1-P(\mbox{aucune bonne stratégie}) \\
