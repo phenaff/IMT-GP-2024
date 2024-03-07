@@ -1,0 +1,488 @@
+---
+title: "Programmation Stochastique avec Recours"
+author: "P. Hénaff"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  beamer_presentation:
+    colortheme: dolphin
+    theme: Montpellier
+  slidy_presentation: default
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{graphicx}
+  - \usepackage{subfig}
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{multirow}
+  - \usepackage{wrapfig}
+  - \usepackage{float}
+  - \usepackage{colortbl}
+  - \usepackage{pdflscape}
+  - \usepackage{tabu}
+  - \usepackage{threeparttable}
+  - \usepackage{threeparttablex}
+  - \usepackage[normalem]{ulem}
+  - \usepackage{makecell}
+  - \usepackage{xcolor}
+  - \usepackage{xfrac}
+  - \linespread{1.05}
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{pgfplots}
+  - \usepackage{tikz}
+  - \usetikzlibrary{shapes}
+  - \usetikzlibrary{external}
+  - \usepgfplotslibrary{external}
+  - \usepackage[ruled, vlined, linesnumbered]{algorithm2e}
+
+
+bibliography: ../library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+
+
+
+```{r, results='hide', message=FALSE}
+  library(foreach)
+  library(doParallel)
+  library(kableExtra)
+  library(linprog)
+  library(gtools)
+  library(pracma)
+  library(kernlab)
+  library(optiSolve)
+  library(piqp)
+  library(latex2exp)
+```
+
+## Arbre de décision
+
+\scalebox{.7}{
+\begin{tikzpicture}[level distance=1.5cm,
+  level 1/.style={sibling distance=8cm},
+  level 2/.style={sibling distance=4cm},
+  level 3/.style={sibling distance=2cm}]
+  \node {1}
+    child {node {2 high}
+      child {node {4 high}
+        child {node {S-1}}
+        child {node {S-2}}
+        }
+      child {node {5 low}
+        child {node {S-3}}
+        child {node {S-4}}
+      }
+    }
+    child {node {3 low}
+      child {node {6 high}
+        child {node {S-5}}
+        child {node {S-6}}
+        }
+      child {node {7 low}
+        child {node {S-7}}
+        child {node {S-8}}
+      }
+    };
+\end{tikzpicture}
+}
+
+
+## Solution
+
+
+```{r, echo=FALSE}
+Amat <- matrix(0, nrow=15, ncol=30)
+
+sce_up = c(1.25, 1.14)
+sce_down = c(1.06, 1.12)
+sce = rbind(sce_up, sce_down)
+
+Amat[1,1:2] = 1
+Amat[2,1:2] = -sce_up; Amat[2,3:4] = 1
+Amat[3,1:2] = -sce_down; Amat[3,5:6] = 1
+Amat[4,3:4] = -sce_up; Amat[4,7:8] = 1
+Amat[5,3:4] = -sce_down; Amat[5,9:10] = 1
+Amat[6,5:6] = -sce_up; Amat[6,11:12] = 1
+Amat[7,5:6] = -sce_down; Amat[7,13:14] = 1
+
+Amat[8,7:8] = sce_up; Amat[8,15:16] = c(-1, 1)
+Amat[9,7:8] = sce_down; Amat[9,17:18] = c(-1, 1)
+Amat[10,9:10] = sce_up; Amat[10,19:20] = c(-1, 1)
+Amat[11,9:10] = sce_down; Amat[11,21:22] = c(-1, 1)
+Amat[12,11:12] = sce_up; Amat[12,23:24] = c(-1, 1)
+Amat[13,11:12] = sce_down; Amat[13,25:26] = c(-1, 1)
+Amat[14,13:14] = sce_up; Amat[14,27:28] = c(-1, 1)
+Amat[15,13:14] = sce_down; Amat[15,29:30] = c(-1, 1)
+
+bvec = matrix(0, nrow=15, ncol=1)
+
+W.0 = 55000
+G = 80000
+r_short = 4/100
+r_long = 1/100
+prob = 1/8
+
+bvec[1,1] = W.0
+bvec[8:15,1] = G
+cvec = matrix(0, nrow=1, ncol=30)
+cvec[1, seq(15,30,by=2)] = r_long * prob
+cvec[1, seq(16,30,by=2)] = -r_short * prob
+
+bvec = as.vector(bvec)
+cvec = as.vector(cvec)
+
+res = solveLP(cvec, bvec, Amat, const.dir=rep("==", length(bvec)), lpSolve=TRUE, maximum=TRUE,verbose=1)
+
+sol = matrix(0, nrow=7, ncol=3)
+for(i in seq(7)) {
+  sol[i,] = c(i, res$solution[(2*i-1):(2*i)])
+}
+colnames(sol) <- c("Node", "Stock", "Bond")
+```
+
+```{r, echo=FALSE}
+kable(sol, caption="Optimal asset allocation at each node in the 3-period tree",
+booktabs=T, digits=0) %>%
+kable_styling(latex_options="hold_position")
+```
+
+The excess or shortfall at horizon $T$ for each scenario is displayed in Table \@ref(tab:es).
+
+```{r es, echo=FALSE}
+wealth <- matrix(0, nrow=8, ncol=3)
+colnames(wealth) <- c("Scenario", "Shortfall", "Excess")
+for(i in seq(8)) {
+  wealth[i,] = c(i, res$solution[14+2*i], res$solution[14+2*i-1])
+}
+kable(wealth, caption="Shortfall or excess by scenario",
+booktabs = T, digits=0)
+```
+
+
+## Solution Stochastique vs Miope
+
+```{r, echo=FALSE}
+return.index <- permutations(2,3,c(0,1), repeats.allowed = T)
+return.high <- 1.25
+return.low <- 1.06
+
+idx <- rowSums(return.index)
+return.by.scenario <- return.high ^ (3-idx) * return.low ^ idx
+wealth.by.scenario <- W.0 * return.by.scenario
+```
+
+```{r ev, echo=FALSE}
+options(knitr.kable.NA = "")
+df = data.frame(Scenarios=seq(8),
+W1.Short=-pmin(wealth.by.scenario-G, 0),
+W1.Long = pmax(wealth.by.scenario-G, 0),
+W2.Short=wealth[,2],
+W2.Long=wealth[,3])
+kable(replace(df, df==0, NA), col.names=c("Scenario", "Shortfall", "Surplus", "Shortfall", "Surplus"),
+booktabs=T, digits=0,
+caption="Expected Value vs. Recourse solutions of the asset allocation problem.") %>%
+  kable_paper() %>%
+  add_header_above(c(" "=1, "EV solution"=2, "Recourse solution"=2)
+  )
+```
+
+
+
+```{r, echo=F}
+expected.cost.ev = mean( -df$W1.Short*r_short + df$W1.Long*r_long)
+expected.cost.sp = mean( -df$W2.Short*r_short + df$W2.Long*r_long)
+VSS = expected.cost.sp - expected.cost.ev
+```
+
+## Lagrangien Augmenté
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\SetAlgoLined
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{$\rho$, tol, $k_{\mbox{max}}$}
+\Output{$x^*$}
+\BlankLine
+$k <- 0; \lambda_k <- 0$\;
+\While{$k<k_{\mbox{max}}$ and $t > tol$}{
+    $x_{k+1} <-  \underset{x}{\mathrm{argmin}} \phi_k(x)$\;
+    $\lambda_{k+1} <- \lambda_k - \rho g(x_{k+1})$\;
+    $k <- k+1$\;
+    $t_1  <- ||\lambda_{k+1} - \lambda_k||$\;
+    $t_2 <- ||g(x_{k+1}||$\;
+    $t <- t_1 \mbox{and} t_2$\;
+    }
+\caption{Augmented Lagrangian algorithm}
+\end{algorithm}
+
+
+## Algo Progressive Hedging
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\SetAlgoLined
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{$\rho$, tol, $i_{\mbox{max}}$}
+\Output{$x^*$}
+\BlankLine
+$i <- 0; \lambda_i <- 0; \mbox{converged} <- False$\;
+\While{$k<k_{\mbox{max}}$ and $! \mbox{converged}$}{
+    Solve the $K$ subproblems \ref{eq:subproblems} to obtain $x^{i+1}_k, k = 1, \ldots, K$\;
+    Compute  $\hat{x}^{i+1} = \sum_{k=1}^K \pi_k x^{i+1}_k$\;
+    Update the multipliers: $\lambda^{i+1}_k = \lambda^i_k - \rho(x^{i+1}_k - \hat{x}^{i+1})$\;
+    $i <- i+1$\;
+    $t_1  <- ||\lambda^{i+1} - \lambda^i|| < \mbox{tol}_1$\;
+    $t_2 <- ||g^1(x^{i+1}|| < \mbox{tol} < \mbox{tol}_2$\;
+    $t_3 <- ||g^2(x^{i+1}|| < \mbox{tol} < \mbox{tol}_3$\;
+    $\mbox{converged} <- t_1 \ \  \mbox{and} t_2 \ \ \mbox{and} t_3$\;
+    }
+\caption{Progressive Hedging algorithm}
+\end{algorithm}
+
+
+```{r, echo=FALSE}
+P <- matrix(0, nrow=4, ncol=4)
+P[3,3] = 1
+P[4,4] = 1
+c <- rep(0, 4)
+G <- matrix(c(1, 1, 0, 0,
+              -1, -3, -1, 0,
+              -4, -2, 0, -1), nrow=3, byrow=TRUE)
+h <- c(10, -25, -25)
+x_lb <- rep(0, 4)
+sol <- solve_piqp(P=P, c=c, G=G, h=h, x_lb=x_lb )
+```
+
+```{r, echo=F}
+sub.prob <- function(x.hat, r, w, q) {
+P <- zeros(3,3)
+P[1,1] <- r
+P[2,2] <- r
+P[3,3] <- 2
+c <- c(w - r*x.hat, 0)
+G <- matrix(c(1, 1, 0,
+              -q[1], -q[2], -1), nrow=2, byrow = TRUE)
+h <- c(10, -25)
+x_lb <- rep(0,3)
+sol <- solve_piqp(P=P, c=c, G=G, h=h, x_lb = x_lb)
+sol
+}
+```
+
+
+```{r, echo=F}
+q = matrix(c(1,3,4,2), nrow=2, byrow=TRUE)
+w = matrix(0, nrow=2, ncol=2)
+x.hat <- c(0,0)
+x = matrix(0, nrow=2, ncol=2)
+tol <- 1.0e-2
+x[1,] <- sub.prob(x.hat, r=0, w[1,], q[1,])$x[1:2]
+x[2,] <- sub.prob(x.hat, r=0, w[2,], q[2,])$x[1:2]
+x.hat <- colMeans(x)
+
+conver <- FALSE
+iter.count <- 0
+iter.max <- 100
+r = 2
+x.iter <- matrix(0, nrow=iter.max, ncol=2)
+
+while(!conver & (iter.count < iter.max)) {
+iter.count <- iter.count + 1
+x.iter[iter.count,] = x.hat
+x[1,] <- sub.prob(x.hat, r, w[1,], q[1,])$x[1:2]
+x[2,] <- sub.prob(x.hat, r, w[2,], q[2,])$x[1:2]
+
+
+x.hat.old <- x.hat
+x.hat <- colMeans(x)
+w.old <- w
+w[1,] = w[1,] + r * (x[1,] - x.hat)
+w[2,] = w[2,] + r * (x[2,] - x.hat)
+
+# convergence test
+test.1 <- norm(x.hat-x.hat.old, type="2")
+test.2 <- norm(w - w.old, type="2")
+
+conver <- (test.1 <= tol) & (test.2 <= tol)
+}
+```
+
+## First Example
+
+```{r, PHA-plot, echo=FALSE, out.width="70%",fig.cap="Progressive Hedging Iterations", fig.align='left'}
+plot(seq(iter.count),x.iter[1:iter.count,1], ylim=c(2, 8), type="l", col="blue", xlab="Iterations",
+     ylab=expression(X))
+lines(seq(iter.count), x.iter[1:iter.count,2], type="l", col="red")
+abline(h=2.5)
+abline(h=7.5)
+```
+
+
+## Second example: A 3-stage optimization problem
+
+```{r, echo=F}
+nb.vars = 8
+A <- matrix(0, nrow=4, ncol=nb.vars)
+rownames(A) = c("t_0", "t_1", "t_2", "t_3")
+colnames(A) = c("xA.1", "xB.1","xA.2", "xB.2","xA.3", "xB.3","M", "P")
+W.0 = 55000
+G = 80000
+b = c(W.0, 0, 0, G)
+r_short = 4
+r_long = 1
+tol <- 1
+
+pha.sub <- function(sce, r, w, x.hat, r_short, r_long, b) {
+  nb.vars=8
+  nb.x = 6
+A <- matrix(0, nrow=4, ncol=nb.vars)
+A[1,1:2] = 1
+A[2,1:2] = sce[1,]; A[2,3:4] = -1
+A[3,3:4] = sce[2,]; A[3,5:6] = -1
+A[4,5:6] = sce[3,]; A[4,7:8] = c(1, -1)
+Q = pracma::zeros(nb.vars, nb.vars)
+for(i in seq(nb.x)) {
+  Q[i,i] = r
+}
+c = c(w - r * x.hat, r_short, -r_long)
+x_lb = rep(0, nb.vars)
+piqp::solve_piqp(P=Q, c=c, A=A, b=b, x_lb=x_lb)
+}
+```
+
+
+```{r, echo=FALSE}
+sce = rbind(sce_up, sce_up, sce_up)
+nb.x = 6
+nb.vars = 8
+nb.scen = 8
+
+x.hat = (55000/2)*rep(1, nb.x)
+r = 0
+w = rep(0, nb.x)
+sol = pha.sub(sce, r, w, x.hat, r_short, r_long, b)
+```
+```{r, echo=FALSE}
+scen = rbind(sce_up, sce_down)
+m.scen = as.matrix(expand.grid(stage.2=c(1,2), stage.1=c(1,2), stage.0=c(1,2)))
+m.scen = m.scen[,c(3,2,1)]
+
+mean.x <- function(scen.list, i.var) {
+  # Compute the mean value of variable i.var over the bundle of scenarios
+  # scen.list
+  tmp = vector()
+  for(i in scen.list) {
+    tmp = c(tmp, all_sol[[i]]$x[i.var])
+  }
+  mean(tmp)
+}
+
+calc.x.hat <- function() {
+x.hat = matrix(0, nrow=8, ncol=6)
+# stage 0
+s = seq(8)
+x.hat[s,1] = mean.x(s, 1)
+x.hat[s,2] = mean.x(s, 2)
+# stage 1
+s = seq(4)
+x.hat[s,3] = mean.x(s, 3)
+x.hat[s,4] = mean.x(s, 4)
+s = as.integer(c(5,6,7,8))
+x.hat[s,3] = mean.x(s, 3)
+x.hat[s,4] = mean.x(s, 4)
+# stage 2
+s = c(1,2)
+x.hat[s,5] = mean.x(s, 5)
+x.hat[s,6] = mean.x(s, 6)
+s = c(3,4)
+x.hat[s,5] = mean.x(s, 5)
+x.hat[s,6] = mean.x(s, 6)
+s = c(5,6)
+x.hat[s,5] = mean.x(s, 5)
+x.hat[s,6] = mean.x(s, 6)
+s = c(7,8)
+x.hat[s,5] = mean.x(s, 5)
+x.hat[s,6] = mean.x(s, 6)
+x.hat
+}
+```
+
+
+```{r, echo=FALSE, cache=TRUE, warning=FALSE}
+# Detect the number of available cores
+nb.available.cores <- parallel::detectCores()
+nb.cores <- 8
+# print(paste("Using ", nb.cores, " cores out of ", nb.available.cores))
+
+# Create a cluster and register
+cluster <- parallel::makeCluster(nb.cores, type="PSOCK")
+doParallel::registerDoParallel(cl=cluster)
+```
+
+```{r}
+# Initialize with perfect foresight
+w = matrix(0, nrow=8, ncol=6)
+r = 0
+x.hat = matrix(0, nrow=8, ncol=6)
+
+run.subproblems <- function(foo, scen, m.scen, r,w,x.hat, r_short, r_long, b) {
+
+all_sol <- foreach(i = seq(nrow(m.scen))) %dopar% {
+  sce = scen[m.scen[i,],]
+  foo(sce, r, w[i,], x.hat[i,], r_short, r_long, b)
+}
+all_sol
+}
+
+all_sol <- run.subproblems(pha.sub, scen, m.scen, r, w, x.hat,
+r_short, r_long, b)
+x.hat <- calc.x.hat()
+
+conver <- FALSE
+iter.count <- 0
+iter.max <- 2000
+r = .00002
+x.iter = matrix(0, nrow=iter.max, ncol=4)
+while(!conver & (iter.count < iter.max)) {
+iter.count <- iter.count + 1
+x.iter[iter.count,] = x.hat[1,1:4]
+
+all_sol = run.subproblems(pha.sub, scen, m.scen, r, w, x.hat, r_short, r_long, b)
+
+x.hat.old <- x.hat
+x.hat <- calc.x.hat()
+w.old <- w
+for(i in seq(nrow(m.scen))) {
+  w[i,] = w[i,] + r*(all_sol[[i]]$x[1:6]-x.hat[i,])
+}
+
+# convergence test
+test.1 <- norm(x.hat-x.hat.old, type="2")
+test.2 <- norm(w - w.old, type="2")
+
+conver <- (test.1 <= tol) & (test.2 <= tol)
+}
+```
+
+
+```{r, PHA-plot-1, echo=FALSE, out.width="70%", fig.cap="Progressive Hedging Iterations for the 3-stages asset allocation problem, showing the convergence of the first 4 variables.", fig.align='left'}
+alpha <- 1:4
+plot(seq(iter.count),x.iter[1:iter.count,1], ylim=c(0, 70000), type="l", col=alpha[1], xlab="Iterations",
+     ylab=expression(X))
+lines(seq(iter.count), x.iter[1:iter.count,2], type="l", col=alpha[2])
+lines(seq(iter.count), x.iter[1:iter.count,3], type="l", col=alpha[3])
+lines(seq(iter.count), x.iter[1:iter.count,4], type="l", col=alpha[4])
+legend("topleft", legend=TeX(sprintf(r'($x_%d$)', alpha)),
+lwd=1,
+col=alpha)
+```

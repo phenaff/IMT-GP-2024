@@ -139,7 +139,7 @@ $$
 The objective function to be maximized is the expected utility of the investment policy at horizon $T$:
 
 $$
-\max \sum_{i=1}^8 (q v^i - r w^i)
+\max \sum_{i=1}^8 (r v^i - q w^i)
 $$
 
 ## Solution
@@ -153,22 +153,22 @@ sce_up = c(1.25, 1.14)
 sce_down = c(1.06, 1.12)
 sce = rbind(sce_up, sce_down)
 
-Amat[1,1:2] = -1
-Amat[2,1:2] = sce_up; Amat[2,3:4] = -1
-Amat[3,1:2] = sce_down; Amat[3,5:6] = -1
-Amat[4,3:4] = sce_up; Amat[4,7:8] = -1
-Amat[5,3:4] = sce_down; Amat[5,9:10] = -1
-Amat[6,5:6] = sce_up; Amat[6,11:12] = -1
-Amat[7,5:6] = sce_down; Amat[7,13:14] = -1
+Amat[1,1:2] = 1
+Amat[2,1:2] = -sce_up; Amat[2,3:4] = 1
+Amat[3,1:2] = -sce_down; Amat[3,5:6] = 1
+Amat[4,3:4] = -sce_up; Amat[4,7:8] = 1
+Amat[5,3:4] = -sce_down; Amat[5,9:10] = 1
+Amat[6,5:6] = -sce_up; Amat[6,11:12] = 1
+Amat[7,5:6] = -sce_down; Amat[7,13:14] = 1
 
-Amat[8,7:8] = sce_up; Amat[8,15:16] = c(1, -1)
-Amat[9,7:8] = sce_down; Amat[9,17:18] = c(1, -1)
-Amat[10,9:10] = sce_up; Amat[10,19:20] = c(1, -1)
-Amat[11,9:10] = sce_down; Amat[11,21:22] = c(1, -1)
-Amat[12,11:12] = sce_up; Amat[12,23:24] = c(1, -1)
-Amat[13,11:12] = sce_down; Amat[13,25:26] = c(1, -1)
-Amat[14,13:14] = sce_up; Amat[14,27:28] = c(1, -1)
-Amat[15,13:14] = sce_down; Amat[15,29:30] = c(1, -1)
+Amat[8,7:8] = sce_up; Amat[8,15:16] = c(-1, 1)
+Amat[9,7:8] = sce_down; Amat[9,17:18] = c(-1, 1)
+Amat[10,9:10] = sce_up; Amat[10,19:20] = c(-1, 1)
+Amat[11,9:10] = sce_down; Amat[11,21:22] = c(-1, 1)
+Amat[12,11:12] = sce_up; Amat[12,23:24] = c(-1, 1)
+Amat[13,11:12] = sce_down; Amat[13,25:26] = c(-1, 1)
+Amat[14,13:14] = sce_up; Amat[14,27:28] = c(-1, 1)
+Amat[15,13:14] = sce_down; Amat[15,29:30] = c(-1, 1)
 
 bvec = matrix(0, nrow=15, ncol=1)
 
@@ -178,16 +178,16 @@ r_short = 4/100
 r_long = 1/100
 prob = 1/8
 
-bvec[1,1] = -W.0
+bvec[1,1] = W.0
 bvec[8:15,1] = G
 cvec = matrix(0, nrow=1, ncol=30)
-cvec[1, seq(15,30,by=2)] = -r_short * prob
-cvec[1, seq(16,30,by=2)] = r_long * prob
+cvec[1, seq(15,30,by=2)] = r_long * prob
+cvec[1, seq(16,30,by=2)] = -r_short * prob
 
 bvec = as.vector(bvec)
 cvec = as.vector(cvec)
 
-res = solveLP(cvec, -bvec, -Amat, maximum=TRUE,verbose=1)
+res = solveLP(cvec, bvec, Amat, const.dir=rep("==", length(bvec)), lpSolve=TRUE, maximum=TRUE,verbose=1)
 
 sol = matrix(0, nrow=7, ncol=3)
 for(i in seq(7)) {
@@ -208,7 +208,7 @@ The excess or shortfall at horizon $T$ for each scenario is displayed in Table \
 wealth <- matrix(0, nrow=8, ncol=3)
 colnames(wealth) <- c("Scenario", "Shortfall", "Excess")
 for(i in seq(8)) {
-  wealth[i,] = c(i, res$solution[(14+2*i-1):(14+2*i)])
+  wealth[i,] = c(i, res$solution[14+2*i], res$solution[14+2*i-1])
 }
 kable(wealth, caption="Shortfall or excess by scenario",
 booktabs = T, digits=0)
@@ -263,8 +263,6 @@ On all counts, the multi-stage model clearly adds value, compared to a simpler m
 
 # Review of optimization theory
 
-## Duality
-
 ## Augmented Lagrangian
 
 For the sake of simplicity, we restrict the discussion to programs with equality constraints. Faced with such program, the idea is to try to simplify the problem by incorporating the constraints in the objective function.
@@ -295,7 +293,7 @@ The basic idea of the augmented Lagrangian method is to combine the two previous
 * Solve the problem
 
 $$
-\mbox{min} \ \ f(x) + \lambda^T g(x) + \frac{1}{2} \rho g(x)^Tg(x)
+\mbox{min} \ \ f(x) - \lambda^T g(x) + \frac{1}{2} \rho g(x)^Tg(x)
 $$
 
 where the presence of the multiplier mitigates the need for a very large $\rho$.
@@ -305,14 +303,14 @@ where the presence of the multiplier mitigates the need for a very large $\rho$.
 Let's now consider how to determine $\lambda$. In an iterative procedure, with $\lambda$ and $\rho$ set to values $\lambda_k$ and $\rho_k$, we solve
 
 $$
-\mbox{min}_x \ \ \phi_k(x) = f(x) + \lambda_k^T g(x) + \frac{1}{2} \rho_k g(x)^Tg(x)
+\mbox{min}_x \ \ \phi_k(x) = f(x) - \lambda_k^T g(x) + \frac{1}{2} \rho_k g(x)^Tg(x)
 $$
 
 the first order necessary condition is
 
 $$
 \begin{aligned}
-0 & = \nabla \phi_k(x_{k+1}) = \nabla f(x_{k+1}) + \nabla g(x_{k+1}) \lambda_k + \rho_k \nabla g(x_{k+1})g(x_{k+1}) \\
+0 & = \nabla \phi_k(x_{k+1}) = \nabla f(x_{k+1}) - \nabla g(x_{k+1}) \lambda_k + \rho_k \nabla g(x_{k+1})g(x_{k+1}) \\
 \nabla f(x_{k+1}) & = \nabla g(x_{k+1}) \left[ \lambda_k - \rho_k g(x_{k+1}) \right]
 \end{aligned}
 $$
@@ -326,7 +324,7 @@ $$
 which provides the updating formula for $\lambda$:
 
 $$
-\lambda_{k+1} = \lambda_k + \rho_k g(x_{k+1})
+\lambda_{k+1} = \lambda_k - \rho_k g(x_{k+1})
 $$
 
 For the time being, we will take $\rho$ as fixed. The complete algorithm is therefore:
@@ -341,7 +339,7 @@ For the time being, we will take $\rho$ as fixed. The complete algorithm is ther
 $k <- 0; \lambda_k <- 0$\;
 \While{$k<k_{\mbox{max}}$ and $t > tol$}{
     $x_{k+1} <-  \underset{x}{\mathrm{argmin}} \phi_k(x)$\;
-    $\lambda_{k+1} <- \lambda_k + \rho g(x_{k+1})$\;
+    $\lambda_{k+1} <- \lambda_k - \rho g(x_{k+1})$\;
     $k <- k+1$\;
     $t_1  <- ||\lambda_{k+1} - \lambda_k||$\;
     $t_2 <- ||g(x_{k+1}||$\;

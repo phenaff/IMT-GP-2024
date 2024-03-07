@@ -44,7 +44,7 @@ vignettes/*.pdf
 **/figure-beamer/
 **/*_files/
 *.tex
-*.log
+*/*.log
 
 # R Environment Variables
 .Renviron

@@ -1,5 +1,6 @@
 ---
 title: "Portefeuilles Obligataires"
+subtitle: "Optimisation de Portefeuille Obligataire"
 author: "P. Hénaff"
 date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
 output:
@@ -57,47 +58,6 @@ get.src.folder <- function() {
  source(file.path(get.src.folder(), 'utils.R'))
  source(file.path(get.src.folder(), 'FileUtils.R'))
 ```
-
-## Calcul Prix/Rendement
-
-Prix "coupon couru inclus"
-$$
-PV = \frac{1}{(1+r)^{\frac{t_1 - t_0}{D}}} \left( Nc + \frac{Nc}{(1+r)} + \ldots + \frac{N(1+c)}{(1+r)^N}\right)
-$$
-
-Coupon couru:
-
-$$
-\mathsf{CC} = Nc \ \ \frac{t_0 - t_{-1}}{D}
-$$
-Prix "pied de coupon"
-
-$$
-P = PV - CC
-$$
-
-## Exemple: Veolia 4,625% 3/2017 (FR0011224963)
-
-www.boerse-frankfurt.de/bond
-
-+ Date de calcul: 17/3/2021
-+ Date de règlement/livraison: 18/3/2021
-+ Date de maturité: 30/3/2027
-+ Coupon: 4.625
-+ Convention ACT/365
-+ Prix (bid): 126.85
-+ CC: 4.46
-+ Rendement (bid): 0.1507 %
-
-Vérifier avec la librairie BondValuation.
-
-## Risque de taux
-
-PV01 "present value of 1 basis point"
-
-$$
-\mathcal{PV}01 = -\frac{\partial P}{\partial r} \times 0.0001
-$$
 
 ## Objectif de gestion
 

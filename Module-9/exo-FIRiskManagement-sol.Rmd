@@ -1,0 +1,349 @@
+---
+title: "Finance Quantitative"
+subtitle: "Risque de Taux"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(quantmod)
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(PerformanceAnalytics)
+library(TTR)
+library(SuppDists)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(kableExtra)
+library(linprog)
+library(pracma)
+library(quadprog)
+```
+
+
+# Cash flow matching
+  
+Suppose the price is \$212 for a 2-year coupon bond with face of \$200 and an
+annual coupon (first one is one year from now) of \$40. 
+Suppose also that the price
+is \$150 for a 1-year coupon bond with face of \$150 and an annual coupon (one
+remaining, one year from now) of \$15.
+
+Remaining pension benefits in a plan having two more years to go are \$95,000
+one year from now and \$60,000 two years from now. 
+
+\begin{enumerate}
+\item What replicating portfolio of the two coupon bonds covers the pension liabilities exactly? 
+  \item What is the price of the replicating portfolio?
+  \end{enumerate}
+  
+
+Let $q_1, q_2$ be the quantities of bonds 1 and 2.
+\begin{eqnarray*}
+95000 &=& 40 q_1 + 165 q_2 \\
+60000 &=& 240 q_1
+\end{eqnarray*}
+
+Therefore,
+
+```{r, echo=TRUE}
+q1 <- 60000/240
+q2 <- (95000 - 40*q1)/165
+```
+
+Solution: $q_1 = `r round(q1,3)`,q_2 = `r round(q2,3)`$.
+
+```{r, echo=TRUE}
+P <- 212 * q1 + 150 * q2
+```
+
+Portfolio cost: $P= `r round(P,2)`$.
+
+Immunisation solution:
+
+```{r}
+BondPrice <- function(coupon, n, yield) {
+  100*sum(sapply(1:n, function(i) ifelse(i<n, coupon/(1 + yield)^i, (1+coupon)/(1+yield)^n)))
+}
+
+Price2Yield <- function(coupon, n, price) {
+  errP <- function(y) {price - BondPrice(coupon, n, y)}
+  r <- uniroot(errP, c(.001, .3))
+  r$root
+}
+
+BondPV01 <- function(coupon, n, yield) {
+  BondPrice(coupon, n, yield-0.0001) - BondPrice(coupon, n, yield)
+}
+
+# convert all data to 100 nominal for yield calculation
+
+c.1 = 40 *(100/200) / 100
+p.1 = 212 * (100/200)
+y.1 = Price2Yield(c.1, 2, p.1)
+c.2 = 15 * (100/150) / 100
+p.2 = 150 * (100/150)
+y.2 = Price2Yield(c.2, 1, p.2)
+
+# PV liability:
+L.Price <- function(y) {
+  95000/(1+y) + 60000/(1+y)^2
+}
+p.l = P
+
+err.L <- function(y) {
+  p.l - L.Price(y)
+}
+y.L <- uniroot(err.L, c(.001, .3))$root
+
+
+# PV01:
+pv01.1 <- BondPV01(c.1, 2, y.1)
+pv01.2 <- BondPV01(c.2, 1, y.2)
+pv01.l <- L.Price(y.L-.0001) - L.Price(y.L)
+
+A = matrix(c(p.1, p.2, pv01.1, pv01.2), nrow=2, byrow=TRUE)
+b = c(p.l, pv01.l)
+q = solve(A, b)
+
+Cost <- sum(q*c(p.1, p.2))
+```
+# Bond dedication
+  
+In this problem, we construct a bond portfolio that generates a cash flow stream that matches a liability.
+
+Assume that you must pay the amounts summarized in table~\ref{tab:liability}. You can invest in a portfolio of 5 bonds described in table~\ref{tab:bonds-2}.
+
+  \begin{table}[h]
+    \centering
+    \begin{tabular}{ll}
+    Year & Cash Flow \\
+    \hline
+    1    & -100 \\
+    2    & -200 \\
+    3    & -150 \\
+    4 & -400 \\
+    5 & -300
+  \end{tabular}
+    \caption{Liability cash flow stream}
+    \label{tab:liability}
+  \end{table}
+
+
+  \begin{table}[h]
+    \centering
+    \begin{tabular}{llll}
+    Bond & Maturity & Coupon & Yield \\
+    \hline
+    A & 1 & .05 & .05 \\
+    B & 2    & .07 & .075 \\
+    C & 3    & .06 & .058 \\
+    D & 4 &  .05  & .049 \\
+    E & 5 & .08 & .081
+  \end{tabular}
+    \caption{Available bonds for dedication}
+    \label{tab:bonds-2}
+  \end{table}
+
+At every period, we can re-invest excess cash flow at a rate of $.02$, but cannot borrow.
+
+Let's define the following notation:
+
+\begin{description}
+\item[$q_i$] quantity of bond $i$
+\item[$C(t)$] cash balance at time $t$
+  \item[$F_i(t)$] cash flow from 1 unit of bond $i$ at time $t$.    
+\end{description}
+
+The purpose of the problem is to determine $q_i, i \in {A, B, C, D}$ and $C(t), t=0, \ldots, 4$. The cash balance at end of year 5, $C(5)$ should be 0.
+
+\begin{enumerate}
+  \item Write the accounting identity defining the cash-flow balance at each period (i.e. the balance between the money received and the money paid out). 
+  
+$$
+C(t-1) *(1+r) +\sum_i q_i F_i(t) - C(t) = L(t)
+$$
+
+    \item Write the constrains on the variables $q_i$ and $C(t)$.
+$$
+q_i >= 0 \ \ \forall i \\
+C(t) >= 0 \ \ t= 0, \ldots, 5
+$$
+
+\item Your goal is to minimize the cost of this dedication strategy. Write the corresponding objective function.
+$$
+\sum_i q_i P_i + C(0)
+$$
+
+\item Use the linprog package in R to solve the problem
+\end{enumerate}
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Cash Flow matrix
+cf <- matrix(
+  data=c(105, 0, 0, 0, 0,
+           7, 107, 0, 0, 0,
+         6, 6, 106, 0, 0,
+         5, 5, 5, 105, 0,
+         8, 8, 8, 8, 108), byrow=FALSE, ncol=5)
+
+# cash reinvestment
+rf <- .02
+cash <- matrix(
+  data = c((1+rf), -1, 0, 0, 0, 0,
+           0, (1+rf), -1, 0, 0, 0,
+           0, 0, (1+rf), -1, 0, 0,
+           0, 0, 0, (1+rf), -1, 0,
+           0, 0, 0,  0, (1+rf), -1),   byrow=TRUE, ncol=6)
+
+# discount factors
+r <- c(0.05, .075, .058, .049, .081)
+df <- sapply(seq(5), function(t) (1/(1+r))**t)
+P <- colSums(cf * df)
+A <- cbind(cf, cash)
+obj <- c(P, 1, rep(0,5))
+rhs = c(100,200,150,400,300)
+lower.bound <- rep(0, length(obj))
+
+res <- solveLP(cvec=obj, Amat=A, b=rhs, const.dir=rep("=", nrow(A)), lpSolve=TRUE)
+```
+
+Since there are 5 independent bonds available to match 5 liabilities, an exact solution can be found:
+
+```{r, echo=FALSE}
+tmp <- data.frame(bonds = c("A", "B", "C", "D", "E"), quantity=res$solution[1:5])
+kable(tmp, booktabs=TRUE, digits=c(0,3),caption="Optimal portfolio")
+```
+
+If bounds are sets on quantity, then cash needs to be carried from period to period in order to balance inflows and outflows.
+Let's limit quantities to 2.5.
+
+```{r, echo=TRUE}
+bounds <- cbind(diag(5), zeros(5, 6))
+rhs.bounds <- rep(2.5,5)
+res <- solveLP(cvec=obj, Amat=rbind(A, bounds), b=c(rhs, rhs.bounds), const.dir=c(rep("=", nrow(A)), rep("<=", 5)), lpSolve=TRUE)
+```
+The optimal portfolio is
+
+```{r, echo=FALSE} 
+tmp <- data.frame(bonds = c("A", "B", "C", "D", "E"), quantity=res$solution[1:5])
+kable(tmp, booktabs=TRUE, digits=c(0,3), caption="Optimal portfolio with constraints on quantities")
+```
+
+and, as expected, a positive cash balance needs to be maintained in some periods.
+
+```{r, echo=FALSE} 
+tmp <- data.frame(Year=seq(0,5), Cash=tail(res$solution,6))
+kable(tmp, row.names=FALSE, digits=c(0,2), booktabs=TRUE, caption="Cash balance in each period")
+```
+
+
+# Reinvestment Risk and Market Risk
+  
+Consider a 3-year standard bond with a 6\% YTM and a 100 \euro\ face value, which
+delivers a 10\% coupon rate. Coupon frequency and compounding frequency are
+assumed to be annual. Its price is 110.69 \euro\ and its duration is equal to 2.75. We assume that YTM changes instantaneously to become 5\%, 5.5\%, 6.5\% or 7\% and
+stays at this level during the life of the bond. Whatever the change in this YTM,
+show that the sum of the bond price and the reinvested coupons after 2.75 years
+is always the same.
+
+# Duration Hedging
+
+An investor holds 100,000 units of bond A whose features are summarized in the
+following table. He wishes to be hedged against a rise in interest rates by selling some bond H.
+
+\begin{table}[ht]
+  \centering
+  \begin{tabular}{llllll}
+\toprule \\
+Bond & Maturity & Coupon rate (\%) & YTM (\%) & Duration & Price \\
+\midrule \\
+A & 18 & 9.5 & 8 &  9.5055 & 114.181 \\
+H & 20 & 10 & 8 & 9.87 & 119.792 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Coupon frequency and compounding frequency are assumed to be semiannual.
+YTM stands for yield to maturity. The YTM curve is flat at an 8\% level.
+
+\begin{enumerate}
+  \item What is the quantity of the hedging instrument H that the investor has to sell?
+\item We suppose that the YTM curve increases instantaneously by 0.1\%.
+\begin{enumerate}
+  \item What happens if the bond portfolio has not been hedged?
+  \item And if it has been hedged?
+  \end{enumerate}
+  \item Same question as the previous one when the YTM curve increases instantaneously by 2\%.
+\item Conclude.
+\end{enumerate}
+
+What is the quantity of the hedging instrument H that the investor has to sell?
+
+PV01 is related to duration by the formula:
+
+\[
+\mbox{PV01} = \frac{D}{1+\frac{r}{2}} \frac{P}{100} \times \frac{1}{10000}
+\]
+
+PV01 of A and H:
+```{r, echo=TRUE}
+PV01.A <- 9.5055 / (1 + .08/2) * (114.181/100) * (1/10000) 
+PV01.H <- 9.87 / (1 + .08/2) * (119.792/100) * (1/10000)
+
+Q.A <- 100000
+Q.H <- Q.A * PV01.A / PV01.H 
+```
+
+The investor should sell $Q.H = `r     round(Q.H,0)`$ \ units of bond H.
+
+We suppose that the YTM curve increases instantaneously by 0.1\%.
+
+We use the following pricing function for a semi-annual bond:
+
+```{r, echo=TRUE}
+pv.calc.semi <- function(maturity, coupon, yield) {
+100 * ((coupon/yield) * (1 - 1/(1+(yield/2))^(2*maturity)) + 1/(1+(yield/2))^(2*maturity))
+}
+
+u.pc.1 <- 100000*(pv.calc.semi(18, .095, .081) - 114.181)
+h.pc.1 <- u.pc.1 - Q.H*(pv.calc.semi(20, .1, .081) - 119.792)
+
+u.pc.2 <- 100000*(pv.calc.semi(18, .095, .1) - 114.181)
+h.pc.2 <- u.pc.2 - Q.H*(pv.calc.semi(20, .1, .1) - 119.792)
+```
+
+For a $.1\%$ increase:
+
+\begin{enumerate}
+  \item The unhedged price change for a $.1\%$ increase is $`r round(u.pc.1,2)`$.
+  \item The hedged price change for a $.1\%$ increase is $`r round(h.pc.1,2)`$.
+  \end{enumerate}
+
+For a $2\%$ increase in yield:
+
+\begin{enumerate}
+  \item The unhedged price change for a $2\%$ increase is $`r round(u.pc.2,2)`$.
+  \item The hedged price change for a $2\%$ increase is $`r round(h.pc.2,2)`$.
+  \end{enumerate}
+
+This illustrates that the PV01 hedge is valid for small changes in yield.
+
