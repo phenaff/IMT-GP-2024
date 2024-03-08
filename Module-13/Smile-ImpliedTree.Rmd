@@ -1,5 +1,6 @@
 ---
 title: "Quantitative Finance"
+subtitle: "Implied Tree"
 author: "Patrick Hénaff"
 date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
 
@@ -9,7 +10,6 @@ output:
     fig_caption: yes
     latex_engine: pdflatex
 csl: ../apa.csl
-subtitle: Implied Trees
 geometry: margin=1in
 bibliography: ../library.bib
 email: pa.henaff@gmail.com

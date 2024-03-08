@@ -1,0 +1,108 @@
+---
+title: "Exo-Opti_Bond"
+author: "P. Henaff"
+date: "2024-03-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prix obligation
+
+```{r}
+PrixOblig <- function(coupon, n, r) {
+100 * (coupon/r*(1 - 1/(1+r)^n) + 1/(1+r)^n)
+}
+
+coupon <- .05
+r <- seq(.02, .1, length.out=100)
+n <- 10
+p <- sapply(r, function(r) {PrixOblig(coupon, n, r)})
+plot(r,p, type="l")
+abline(h=100, col="red")
+```
+```{r}
+PV01 <- function(coupon, n, r) {
+  epsilon <- 0.0001
+  PrixOblig(coupon, n, r-epsilon) - PrixOblig(coupon, n, r)
+}
+
+# variation de prix pour 10 bp:
+# calcul exact
+r = .05
+coupon = .04
+n = 10
+bp = 0.0001
+delta.P1 <- PrixOblig(coupon, n, r - 10*bp) - PrixOblig(coupon, n, r)
+
+# calcul par pV01
+delta.P2 = 10 * PV01(coupon, n, r)
+
+print(paste("Calcul exact: ", round(delta.P1, 3), "Approx PV01: ", round(delta.P2,3)))
+```
+?
+
+```{r}
+PV.cheap.2 <- PrixOblig(.055, 12, .0755)
+PV01.cheap.2 <- PV01(.055, 12, .0755)
+PV.rich <- PrixOblig(0.05, 10, 0.075)
+PV01.rich <- PV01(0.05, 10, 0.075)
+q.rich <- 100
+q.cheap <- q.rich * PV01.rich / PV01.cheap.2
+budget = q.rich * PV.rich - q.cheap * PV.cheap.2
+print(paste("Q rich", round(q.rich,2), "Q cheap", round(q.cheap,2), "Budget", round(budget,2)))
+```
+
+## Calcul avec 2 obligations cheap
+
+```{r}
+PV.cheap.1 <- PrixOblig(.04, 8, .077)
+PV01.cheap.1 <- PV01(.04, 8, .077)
+
+A <- matrix(c(PV.cheap.1, PV.cheap.2, PV01.cheap.1, PV01.cheap.2), nrow=2, byrow=TRUE)
+b <- c(PV.rich, PV01.rich)*100
+q <- solve(A,b)
+print(round(q,2))
+```
+```{r}
+Rdt <- c(5, 7.5, 5.8, 4.9, 8.1)
+Cp <- c(5, 7, 6, 5, 8)
+Mat <- seq(5)
+Prix <- function(i) {
+  PrixOblig(Cp[i], Mat[i], Rdt[i])
+}
+
+P <- sapply(Mat, Prix)
+L = c(100,200,150,400,300)
+
+cvec <- c(P, 1, rep(0,5))
+A <- matrix(
+  c(105,7,6,5,8,
+    0,107,6,5,8,
+    0, 0, 106, 5, 8,
+    0, 0, 0, 105, 8,
+    0, 0, 0, 0, 108),
+  nrow=5, byrow=TRUE)
+
+r <- .01
+
+C <- (1+r)*diag(5)
+C <- cbind(C, rep(0, 5))
+
+C[1,2] = -1
+C[2,3] =  -1
+C[3,4] = -1 
+C[4,5] = -1
+C[5,6] = -1
+
+
+Amat <- cbind(A, C)
+
+library(linprog)
+
+res <- solveLP(cvec=cvec, bvec=L, Amat=Amat, lpSolve=TRUE,
+               const.dir = rep("=", length(L)))
+```
+
