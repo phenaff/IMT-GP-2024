@@ -31,7 +31,25 @@ header-includes:
 get.src.folder <- function() {
   path.expand("../GP/src")
 }
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+```
+
+```{r setup-utils, include=FALSE}
 source(file.path(get.src.folder(), 'OptionUtils.R'))
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+```{r, warning=FALSE, message=FALSE}
+library(lubridate)
+library(fExoticOptions)
+library(kableExtra)
+library(ggplot2)
+library(stats)
+library(nleqslv)
+library(reshape)
 ```
 
 In this note, we consider methods for pricing derivatives under a
@@ -50,7 +68,7 @@ disruption in supply causes the price differential to jump to \$3 or \$5. In tha
 knitr::include_graphics("../Graphics/lotteryTicket.pdf")
 ```
 
-It is tempting to use make use of historical data, given the very specific nature of the distribution. The question then becomes:
+It is tempting to make use of historical data, given the very specific nature of the distribution. The question then becomes:
 Can we transform an empirical density into a density that:
 
 1.  is risk-neutral,
@@ -144,7 +162,7 @@ Next section describes a method for performing this calculation.
 ## Computation of the risk-neutral density
 
 
-Consider a density $P$ evaluated over $n$ intervals, so that:
+Consider a prior density $P$ evaluated over $n$ intervals, so that:
 
 $$p_i = P(x_i \leq X \leq x_{i+1})$$
 
@@ -153,98 +171,216 @@ which solves the following minimization problem:
 
 $$
 \begin{array}{ll}
-\mbox{max} & -\sum_{i=1}^n p_i \log \frac{p_i}{q_i} \\
+\mbox{max} & -\sum_{i=1}^n q_i \log \frac{q_i}{p_i} \\
 \mbox{such that}   \nonumber \\
-& \sum_{i=1}^n p_i  =  1 \nonumber \\
-& \sum_{i=1}^n p_i A_j(x_i)  =  b_j, j=i, \ldots, m  \nonumber
+& \sum_{i=1}^n q_i  =  1 \nonumber \\
+& \sum_{i=1}^n q_i A_j(x_i)  =  b_j, \ \ j=i, \ldots, m  \nonumber
 \end{array}
 $$
 
-Constraints of a second type may be used to calibrate the
-risk-neutral density to match a variety of market information.
-
-To match a given at-the-money volatility ($\sigma$), set:
+The second set of constraints may be used to calibrate the
+risk-neutral density to match a variety of market information. For example, to match a given at-the-money volatility ($\sigma$), set:
 
 \begin{align}
     A_j(x) & =  x^2 \nonumber \\
     b_j & =  \sigma^2 + \bar{x}^2
 \end{align}
 
-To match the price $s$ of a straddle, set:
+To match the price $s$ of a straddle of strike $K$, set:
 
 \begin{align}
     A_j(x) &= \mid x-K \mid \nonumber \\
     b_j &= s e^{r(T-t)}
 \end{align}
 
-This formulation may be applied to an arbitrary set of options.
-
 Let's write the Lagrangian and the first-order conditions:
 
 $$
-L = - \sum_i p_i \log \frac{p_i}{q_i} + \sum_j \lambda_j (y_j - \sum_i p_i
-    A_j(x_i)) + \mu (1-\sum_i p_i)
+L = - \sum_i q_i \log \frac{q_i}{p_i} + \sum_j \lambda_j (b_j - \sum_i q_i
+    A_j(x_i)) + \mu (1-\sum_i q_i)
 $$
 
 
 \begin{align}
-  \frac{\partial L}{\partial p_i} &= -\ln(\frac{p_i}{q_i}) - 1 -\sum_j \lambda_j A_j(x_i) -\mu = 0 (\#eq:foc-1) \\
-  \frac{\partial L}{\partial \lambda_j} &= y_j - \sum_i p_i A_j(x_i) = 0 (\#eq:foc-2) \\
-  \frac{\partial L}{\partial \mu} &= 1-\sum_i p_i = 0 (\#eq:foc-3)
+  \frac{\partial L}{\partial q_i} &= -\ln(\frac{q_i}{p_i}) - 1 -\sum_j \lambda_j A_j(x_i) -\mu = 0 (\#eq:foc-1) \\
+  \frac{\partial L}{\partial \lambda_j} &= b_j - \sum_i p_i A_j(x_i) = 0 (\#eq:foc-2) \\
+  \frac{\partial L}{\partial \mu} &= 1-\sum_i q_i = 0 (\#eq:foc-3)
 \end{align}
 
 Using \@ref(eq:foc-1), we obtain,
 
-$$p_i = q_i e^{(-1-\sum_j \lambda_j A_j(x_i) -\mu)}$$
-
-Divide by $\sum_i p_i$ to eliminate $\mu$ and a constant term:
-
 \begin{align}
-    p_i &= \frac{q_i e^{(-\sum_j \lambda_j A_j(x_i) -\mu)}}{\sum_k q_k e^{(-1-\sum_j \lambda_j A_j(x_k) -\mu)}} \\
-    &= \frac{q_i e^{(-\sum_j \lambda_j A_j(x_i))}}{\sum_k q_k e^{(-1-\sum_j \lambda_j A_j(x_k))}}
+q_i & = p_i e^{\left(-1-\sum_j \lambda_j A_j(x_i) -\mu\right)} \nonumber \\
+& = p_i e^{\left(-1 - \mu\right)} e^{-\sum_j \lambda_j A_j(x_i)} 
 \end{align}
 
-To calculate $\lambda_j$, we use \@ref(eq:foc-2):
+
+Divide by $\sum_i q_i$ to eliminate $\mu$ and the constant term:
 
 $$
-y_j =  \sum_i p_i A_j(x_i)
+q_i =  \frac{p_i e^{-\sum_j \lambda_j A_j(x_i)}}{\sum_k p_k e^{-\sum_j \lambda_j A_j(x_k)}}
 $$
 
-and substitute the expression for $p_i$:
+To calculate $\lambda_j$, use \@ref(eq:foc-2):
 
 $$
-y_j = \frac{\sum_i q_i e^{(-1-\sum_j \lambda_j A_j(x_i))} A_j(x_i)}{\sum_i q_i e^{(-1-\sum_j \lambda_j A_j(x_i))}}
+b_j =  \sum_i q_i A_j(x_i)
 $$
 
-To summarize, the values for the adjusted probabilities $p_i$ are found to
+and substitute the expression for $q_i$:
+
+$$
+b_j = \frac{\sum_i p_i e^{-\sum_j \lambda_j A_j(x_i)} A_j(x_i)}{\sum_i p_i e^{-\sum_j \lambda_j A_j(x_i)}}
+$$
+
+To summarize, the values for the adjusted probabilities $q_i$ are found to
 be:
 
-$$p_i = \frac{e^{-\sum_j \lambda_j A_j(x_k)}}{\sum_k e^{-\sum_j \lambda_j
+$$q_i = \frac{p_i e^{-\sum_j \lambda_j A_j(x_i)}}{\sum_k p_k e^{-\sum_j \lambda_j
     A_j(x_k)}}$$
 
 with $\lambda_j$ solving the system:
 
 $$
-y_j = \frac{\sum_i q_i e^{-\sum_j \lambda_j A_j(x_i)} A_j(x_i)}{\sum_i q_i
-e^{-\sum_j \lambda_j A_j(x_i)}}, j=1, \ldots, m
+b_j = \frac{\sum_i p_i e^{-\sum_j \lambda_j A_j(x_i)} A_j(x_i)}{\sum_k p_k
+e^{-\sum_j \lambda_j A_j(x_k)}}, \ j=1, \ldots, m
 $$
 
+## Illustration
 
-The density can be further calibrated to available market information.
-Figure \@ref(fig:atm-straddle) shows the result of the minimum entropy
-adjustment to the sample distribution to match both the forward price
-and the value of at-the-money straddles.
+We first generate an empirical density at horizon 1 month by bootstrapping a series of daily returns,
+and compute a smoothed density from the sample points. Figure \@ref(fig:fig-1) shows the density and the cumulative distribution. This is our prior density $P$.
 
-```{r atm-straddle, echo = FALSE, message=FALSE, fig.align='center', fig.cap='Adjusted densities calibrated to straddles.', out.width='0.5\\linewidth'}
-knitr::include_graphics("../Graphics/Straddle.pdf")
+
+```{r, echo=TRUE}
+ts.zc <- get.ts(folder="SBF120", ticker="zc.pa")
+nb.samples <- 500
+nb.days <- 22
+boot.samples <- matrix(sample(ts.zc, size=nb.samples*nb.days, replace=TRUE), nb.samples, nb.days)
+monthly.means <- apply(boot.samples,1,sum)
+adj = 1
+eps <- .2 * diff(range(monthly.means))
+dens <- density(monthly.means, adjust = adj, from=min(monthly.means)-eps, to=max(monthly.means)+eps,
+                n=500)
+dens <- data.frame(x=dens$x, y=dens$y)
 ```
+
+We compute a smooth density from the sample points:
+
+```{r fig-1, echo=FALSE, fig.width=10, fig.cap="Historical monthly return - Zodiac Aerospace"}
+ggplot(data=data.frame(x=monthly.means), aes(x)) + 
+    geom_density(adjust=adj, colour="blue", alpha=0.7) +
+    geom_line(data=dens, aes(x=x, y=cumsum(y)/sum(y)), linewidth=0.7, colour='grey30') +
+    stat_ecdf(colour="red", linewidth=0.6, alpha=0.6) +
+    theme_classic() + xlab("monthly return")
+```
+
+
+
+The historical annualized expected return is `r round(mean(monthly.means)*100,1)` %, and the annualized volatility is `r round(sd(monthly.means)*sqrt(12)*100,1)` %. Assume, however, the risk-free rate is 3% and that ATM straddles are priced at a volatility of 30%. We now adjust the density to be consistent with this
+information.
+
+The market price of an ATM straddle
+```{r}
+S.0 <- 100
+K <- 100
+TTM = 1/12
+r = .03
+sigma = .3
+riskfree.df <- exp(-r*TTM)
+s <- CRRBinomialTreeOption(TypeFlag="ce", S=S.0, X=K, Time=TTM, r=r,
+                             b=r, sigma=sigma, n=200)@price +
+     CRRBinomialTreeOption(TypeFlag="pe", S=S.0, X=K, Time=TTM, r=r,
+                             b=r, sigma=sigma, n=200)@price
+```
+
+The A matrix has two rows: row 1 to match the expected return and row 2 to match the market
+price of the ATM straddle.
+
+```{r}
+x = dens$x
+S.T <- S.0 * exp(x)
+p = dens$y / sum(dens$y)
+A <- matrix(c(S.T, abs(S.T-K)), nrow=2, byrow=TRUE)
+b <- c(S.0/riskfree.df, s/riskfree.df)
+```
+
+Solve for $\lambda_j$ and compute the $q_i$:
+
+```{r}
+obj.func <- function(l) {
+lambda <- matrix(l, nrow=1)
+n.1 <- exp(-lambda %*% A)
+denom = sum(p*n.1)
+num <- vector(mode="numeric", length=2)
+num[1] = sum(p * n.1 * A[1,])
+num[2] = sum(p * n.1 * A[2,])
+
+err <- b - num / denom
+err
+}
+
+sol <- nleqslv(c(1,1), obj.func)
+lambda <- matrix(sol$x, nrow=1)
+
+n.1 <- exp(-lambda %*% A)
+denom <- sum(p*n.1)
+q = p*n.1 / denom
+
+df <- data.frame(x=x, p=p, q=as.vector(q))
+```
+
+Figure \@ref(fig:atm-straddle) shows the result of the minimum entropy
+adjustment to the sample distribution, matching the expected risk-free rate and the market price
+of the ATM straddle.
+
+```{r atm-straddle, echo = FALSE, message=FALSE, fig.align='center', fig.cap='Adjusted densities calibrated to the risk-free rate and to the ATM straddle.', out.width='0.5\\linewidth'}
+sd = sqrt(sum(df$q * (df$x-(r*TTM))^2))
+int.size <- diff(df$x[1:2])
+normal.den <- data.frame(x=df$x, n.dist=dnorm(df$x, mean=r*TTM, sd=sd)*int.size)
+ymax = max(c(df$p, df$q, normal.den$n.dist))
+ymin = 0
+colors <- c("red", "blue", "black")
+plot(df$x, df$p, type="p", col=colors[1], xlab="monthly return", ylab="density",
+     ylim=c(0, 1.1*ymax), pch=20, bty="n")
+lines(df$x, df$q, type="p", col=colors[2], pch=20)
+lines(normal.den$x, normal.den$n.dist, type="l", col=colors[3], lwd=2)
+legend("topright", legend=c("Prior", "Adjusted", "Normal"), col=colors, lty=c(3,3,1), bty="n")
+
+```
+
+## Recovering the smile
+
+We can now compute the smile implied by the shape of the empirical distribution. 
+The implied volatility as a function of strike is shown in Figure \@ref(fig:smile).
+
+```{r}
+KK <- seq(from=90, to=110, by=2)
+c.vol <- vector(mode="numeric", length=length(KK))
+
+for(i in seq_along(KK)) {
+  K <- KK[i]
+  c.price = sum(df$q * pmax(S.T-K, 0)) * exp(-r*TTM)
+  c.vol[i] = GBSVolatility(price=c.price, TypeFlag="c", S=S.0, X=K, Time=TTM, r=r,
+                           b=r)
+}
+```
+
+```{r smile, echo=FALSE, fig.cap="Implied volatility from the adjusted empirical density"}
+plot(KK, c.vol*100, type="l", col="red", xlab="Strike", lwd=2,ylab="Implied volatility", bty="n")
+abline(h=sigma*100, col="blue")
+text(x=95, y=sigma*100+.1, "ATM volatility")
+```
+
+
 
 # Monte-Carlo pricing with historical paths
 
 The principle here is to use actual historical paths in a Monte-Carlo
 simulation. In this section, we summarize the model developed by
-Potters, Bouchaud and Sestovic [@Marc2001].
+Potters *et al* [@Marc2001].
 
+## The hedged Monte-Carlo algorithm
 
 Let’s first introduce some notation:
 
@@ -296,19 +432,10 @@ where $F_a(x)$ are the elementary basis functions. At each step $t$ in the hedge
 Monte-Carlo simulation, we obtain the price function by solving for
 $\beta$ the following optimization problem (formulation for a call):
 
-\begin{align}
-\mbox{min} & \sum_{l=1}^N  [e^{-\rho} C_{t+1}(x^l_{t+1}) - \\
-        & \sum_{a=1}^M \beta_a ( F_a(x_t^l) + F'_a(x_t^l) (x^l_{t+1} e^{-\rho} - x^l_t))]^2 \\
-        \mbox{such that}  &  \notag \\
-        & \sum_{a=1}^M \beta_a  F_a(x_t^l) >=  I(x_t^l) \notag \\
-        & \sum_{a=1}^M \beta_a ( F_a(x_t^l) - F_a(x_t^{l-1})) sgn(x_t^l -
-        x_t^{l-1}) >= 0 (\#eq:non-neg)
-\end{align}
-
-where $I(x)$ is the intrinsic value of the derivative being priced. The
-second constraint enforces the basic non-arbitrage condition that the
-value of a call must be a monotonically increasing function of the spot.
-
+$$
+\mbox{min}  \sum_{l=1}^N  [e^{-\rho} C_{t+1}(x^l_{t+1}) - \\
+        \sum_{a=1}^M \beta_a ( F_a(x_t^l) + F'_a(x_t^l) (x^l_{t+1} e^{-\rho} - x^l_t))]^2
+$$
 A simple modification of the model enables us to account for the bid-ask
 spread on transactions. We assume that the price paths are mid-market
 prices, and that transactions are negotiated at the bid or ask price.
@@ -348,5 +475,242 @@ the equivalent constraint is that the contract value at a given time
 step and state must be greater than the sum of the expected discounted
 cash flows, under the conditional probability of this time step and
 state. The rest of the algorithm is left unchanged.
+
+## Illustration
+
+To demonstrate the usefulness of this algorithm, we reproduce some results from [@Marc2001]. 
+The first experiment compares the Hedged MC algorithm to the classical binomial model for pricing European options, and to a unhedged Monte-Carlo pricing method. 
+The first step is togenerate geometric brownian paths:
+
+```{r}
+GBMPathSimulator <-
+  function(nbObs, nbSim, S0, mu, sigma, TTM, center = 'Mean') {
+    delta.t <- TTM / nbObs
+    if (center == 'Mean') {
+      Z <- rnorm(nbObs * nbSim,mean = 0,sd = 1)
+      dim(Z) <- c(nbObs, nbSim)
+      Z <- Z - mean(Z)
+    } else {
+      Z <- rnorm(nbObs * nbSim / 2,mean = 0,sd = 1)
+      dim(Z) <- c(nbObs, nbSim / 2)
+      Z <- cbind(Z,-Z)
+    }
+    
+    path = (mu - sigma * sigma / 2) * delta.t + sigma * sqrt(delta.t) * Z
+    S <- S0 * rbind(rep(1, nbSim), exp(apply(path, 2, cumsum)))
+    S
+  }
+```
+
+For the sake of simplicity, the basis functions are truncated power functions with one knot located at the strike.
+
+
+```{r}
+  basis <- function(k, S, K, truncate=FALSE) {
+    truncated.S <- if(truncate) pmax(S - K, 0) else S
+    F <- truncated.S ^ (k-1)
+    F.prime <- (k-1)*truncated.S^(k-2)
+    cbind(F, F.prime)
+ }
+```
+
+The hedged Monte-Carlo algorithm is implemented as follows:
+
+```{r}
+nb.paths <- 500  # number of simulated paths
+M <- 8           # number of splines
+X <- matrix(0, nrow=nb.paths, ncol=M+1)
+Z <- matrix(0, nrow=nb.paths, ncol=M+1)
+american.ex <- FALSE
+  
+hedged.mc <- function(payoff, K) {
+  # continuation value at last time step is exercice value
+  CV <- payoff(S[,(nb.steps+1)])
+  t.last=1
+  for (t in nb.steps:t.last) {
+    if(american.ex) {
+      exercice.value <- payoff(S[,t+1])
+      CV <- pmax(CV, exercice.value)
+    }
+    # discounted continuation value
+    disc.CV <- CV * df
+    
+    # compute all polynomial terms
+    for(k in seq(M+1)) {
+      tmp <- basis(k, S[,t], K, truncate=FALSE)
+      C.alpha <- tmp[,1]
+      F.alpha <- tmp[,2] 
+      X[, k] <- C.alpha + F.alpha * (S[, t+1]*df - S[, t])
+      Z[, k] <- C.alpha
+    }
+    
+    # Try polynomial regression until all coefficients OK
+    
+    reg.ok <- FALSE
+    MM <- M
+    MM.min <- if(t>1) 2 else 1
+    while(!reg.ok & MM>=MM.min) {
+      # add truncated term
+      tmp <- basis(MM, S[,t], K, truncate=TRUE)
+      C.alpha <- tmp[,1]
+      F.alpha <- tmp[,2] 
+      X[, MM+1] <- C.alpha + F.alpha * (S[, t+1]*df - S[, t])
+      Z[, MM+1] <- C.alpha
+      
+      # at the origin, the independent variable is the constant S.0
+      if(t>1) {
+        reg <- lm(disc.CV ~ X[,seq(MM+1)] -1, singular.ok = TRUE)
+      } else {
+        reg <- lm(disc.CV ~ X[,seq(MM)] -1, singular.ok = TRUE)
+      }
+      reg.ok <- (any(is.na(reg$coefficients)) == FALSE)
+      if(!reg.ok) MM <- MM-1
+    }
+    if(!reg.ok) {
+      stop(paste("Regression error at t:", t))
+    }
+    
+    if(t>1) {
+      CV <- Z[,seq(MM+1)] %*% matrix(reg$coefficients, ncol=1)
+    } else {
+      CV <- Z[,seq(MM)] %*% matrix(reg$coefficients, ncol=1)
+    }
+  }
+ mean(CV)
+}
+```
+
+The first experiment reported in Potters's paper involves a 3-months Call option, strike 100.
+
+```{r}
+  K.call <- 100
+  call.payoff <- function(S) pmax(S-K.call, 0)
+```
+
+The other parameters of the experiment are as follows:
+
+```{r}
+S.0 <- 100    # spot
+r <- 0.05     # risk-free interest rate
+div <- 0      # dividend yield
+TTM <- 1/4    # time to maturity, in years
+sigma <- 0.30 # volatility
+
+nb.steps <- 20   # number of time steps in simulation
+nb.trials <- 500 # number of replications
+
+dT <- TTM/nb.steps    
+# discount factor for one time step
+df <- exp(-r*dT)
+```
+
+We compare in Table \@ref(tab:euro) the exact Black-Scholes value of the option to the estimates obtained 
+by unhedged Monte-Carlo simulations and by hedged simulations.
+
+```{r, cache=TRUE}
+hedged.mc.price <- vector(mode="numeric", length=nb.trials)
+unhedged.mc.price <- vector(mode="numeric", length=nb.trials)
+
+for(i in seq(nb.trials)) {
+  # simulated paths for the underlying asset
+  S <- t(GBMPathSimulator(nb.steps, nb.paths, S.0, mu=r-div,                                                         sigma = sigma, TTM,  center='Mean'))
+
+  unhedged.mc.price[i] <- mean(call.payoff(S[, nb.steps+1])) * exp(-r*TTM)
+  hedged.mc.price[i] <- hedged.mc(call.payoff, K.call)
+}
+
+opt <- CRRBinomialTreeOption(TypeFlag="ce", S=S.0, X=K.call, Time=TTM, r=r,
+                             b=r, sigma=sigma, n=200)@price
+```
+
+The results show a remarkable consistency between the Hedged MC method and the Black-Scholes value, with a standard deviation reduced by x% with respect to
+the unhedged MC algorithm.
+
+```{r euro, echo=FALSE}
+x <- matrix(c(opt, mean(unhedged.mc.price), mean(hedged.mc.price),
+                      NA, sd(unhedged.mc.price), sd(hedged.mc.price)),
+            nrow=2, byrow=TRUE)
+row.names(x) <- c("Mean", "SD")
+colnames(x) <- c("Black-Scholes", "Unhedged MC", "Hedged MC")
+kable(x, digits=2, format="latex", booktabs=T,
+      caption="Pricing an ATM European option maturity 3 months. $S_0=100$")
+```
+
+The true value of the Hedged MC algorithm is its ability to price an asset under 
+a density that is not risk-neutral. This is demonstrated by the next experiment,
+where the drift of the geometric brownian motion is set to $30\%$. Everything else
+is left as 
+in the previous experiment:
+
+```{r, cache=TRUE}
+drift <- 0.3
+for(i in seq(nb.trials)) {
+  # simulated paths for the underlying asset
+  S <- t(GBMPathSimulator(nb.steps, nb.paths, S.0, mu=drift-div,                                                         sigma = sigma, TTM,  center='Mean'))
+
+  unhedged.mc.price[i] <- mean(call.payoff(S[, nb.steps+1])) * exp(-r*TTM)
+  hedged.mc.price[i] <- hedged.mc(call.payoff, K.call)
+}
+```
+
+The results in Table \@ref(tab:drift) show that the Hedged MC correctly prices the option under a geometric brownian motion with an arbitrary drift.
+
+```{r drift, echo=FALSE}
+x <- matrix(c(opt, mean(unhedged.mc.price), mean(hedged.mc.price),
+                      NA, sd(unhedged.mc.price), sd(hedged.mc.price)),
+            nrow=2, byrow=TRUE)
+row.names(x) <- c("Mean", "SD")
+colnames(x) <- c("Black-Scholes", "Unhedged MC", "Hedged MC")
+kable(x, digits=2, format="latex", booktabs=TRUE, caption="Pricing an ATM European option when the scenarios are not risk-neutral. $S_0=100$")
+```
+
+
+In order to evaluate an American put option, the estimated value $C_{k+1}(x_{k+1})$ is 
+replaced by $\max(C_{k+1}(x_{k+1}), K-x_{k+1})$, where $K$ is the strike.
+
+Following Potters's paper, the other parameters are as follows:
+
+```{r}
+S.0 <- 40     # spot
+r <- 0.06     # risk-free interest rate
+div <- 0      # dividend yield
+TTM <- 1      # time to maturity, in years
+sigma <- 0.20 # volatility
+
+nb.steps <- 20   # number of time steps in simulation
+nb.paths <- 500  # number of simulated paths
+nb.trials <- 500 # number of replications
+
+K.put <- 40
+put.payoff <- function(S) pmax(K.put-S, 0)
+
+dT <- TTM/nb.steps    
+# discount factor for one time step
+df <- exp(-r*dT)
+```
+
+```{r, cache=TRUE}
+american.ex <- TRUE
+for(i in seq(nb.trials)) {
+  # simulated paths for the underlying asset
+  S <- t(GBMPathSimulator(nb.steps, nb.paths, S.0, mu=r-div,                                                         sigma = sigma, TTM,  center='Mean'))
+
+  hedged.mc.price[i] <- hedged.mc(put.payoff, K.put)
+}
+
+opt <- CRRBinomialTreeOption(TypeFlag="pa", S=S.0, X=K.put, Time=TTM, r=r,
+                             b=r, sigma=sigma, n=200)@price
+```
+
+Table \@ref(tab:amer) summarizes the results. The estimated price by hedged MC is higher than reported, but qualitatively consistent with the binomial price.
+
+```{r amer, echo=FALSE}
+x <- matrix(c(opt, mean(hedged.mc.price),
+                      NA, sd(hedged.mc.price)),
+            nrow=2, byrow=TRUE)
+row.names(x) <- c("Mean", "SD")
+colnames(x) <- c("Binomial", "Hedged MC")
+kable(x, digits=2, format="latex", booktabs=TRUE, caption="Pricing an ATM American option, maturity 1 year. $S_0=40$", escape=FALSE)
+```
 
 # References {.unlisted .unnumbered}
