@@ -79,5 +79,14 @@ avec: $C$: call .25 $\Delta$, $P$: put .25 $\Delta$, $S$: ATM straddle.
 
 ## Indicateurs de risque
 
-Calculez les indicateurs de risque vega, vanna, volga pour ces trois instruments, et justifier le choix de l'instrument associé à chaque risque dans la version approximative de la méthode VV.
+Calculez les indicateurs de risque vega, vanna, volga pour ces trois instruments:
+
+- Vega: $\partial P / \partial \sigma$
+
+- Vanna: $\partial Vega / \partial S$
+
+- Volga: $\partial Vega / \partial sigma$
+
+Construire la matrice des indicateurs ci-dessus pour les trois instruments de couverture (Straddle, Risk Riversal, Butterfly) et observer la structure de la matrice. Montrer comment cette structure permet 
+un calcul approximatif de la couverture VV.
 
