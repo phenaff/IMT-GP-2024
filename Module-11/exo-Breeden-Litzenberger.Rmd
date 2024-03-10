@@ -45,7 +45,7 @@ source(file.path(get.src.folder(), 'FileUtils.R'))
 
 On se propose de calculer la distribution empirique de $S_T$ à partir de la volatilité implicite des options.
 
-```{r}
+```{r, echo=TRUE}
 sigma <- .2
 S <- 100
 r <- .0
@@ -53,12 +53,12 @@ b <- 0.0
 T <- 1
 ```
 
-La courbe de volatilité est donnée par un polynome du second degré. La volatilité de "Black-Scholes" est la volatilité à l'argent, réputée indépendante du strike.
+La courbe de volatilité est donnée par un polynôme du second degré. La volatilité de "Black-Scholes" est la volatilité à l'argent, réputée indépendante du strike.
 
 ```{r, echo=TRUE}
 ## quadratic smile coefficients
-a1 <- -.40/10
-a2 <- .5/10
+a1 <- -.80/10
+a2 <- 1/10
 
 ## BS volatility function
 bsVol <- function(K) {
@@ -79,6 +79,9 @@ vol.smile <- sapply(KRange, smileVol)
 plot(KRange, vol.smile, type="l", col="red", lwd=2)
 ```
 
+## Options Européenne
+
+Calcul du prix d'un call avec volatilité fonction du strike.
 
 ```{r, echo=TRUE}
 # Call avec smile de volatilité
@@ -94,7 +97,22 @@ print(paste("Call 90: ", round(call.sm(90),3)))
 ## Densité de $S_T$
 
 Calculer la densité $p(S_T)$ en utilisant la formule de Breeden-Litzenberger.
+Le résultat sera une fonction 
+
+```{r}
+smile.pdf <- function(K) {
+  # calcul de p(K) en tenant compte du smile de volatilité
+} 
+```
 
 ## Valorisation de call digitaux strike=140
 
 Valoriser un call digital en dehors de l'argent ($K=105$), en utilisant la distribution lognormale (Black-Scholes) et la distribution implicite dérivée du smile.
+On pourra utiliser la fonction "integrate" pour calculer
+
+$$
+\int_K^\infty p(x) dx
+$$
+
+
+Vérifiez l'intégration numérique de la distribution lognormale à l'aide de la formule analytique du call digital.
