@@ -105,7 +105,7 @@ smile.pdf <- function(K) {
 } 
 ```
 
-## Valorisation de call digitaux strike=140
+## Valorisation d'un call digital strike=105
 
 Valoriser un call digital en dehors de l'argent ($K=105$), en utilisant la distribution lognormale (Black-Scholes) et la distribution implicite dérivée du smile.
 On pourra utiliser la fonction "integrate" pour calculer
@@ -115,4 +115,4 @@ $$
 $$
 
 
-Vérifiez l'intégration numérique de la distribution lognormale à l'aide de la formule analytique du call digital.
+Vérifiez l'intégration numérique de la distribution log-normale à l'aide de la formule analytique du call digital.
