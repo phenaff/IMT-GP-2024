@@ -1,0 +1,81 @@
+---
+title: "Quantitative Finance"
+subtitle: "Exo: Pricing under Historical Distributions"
+author: "Patrick Hénaff"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+
+output:
+  bookdown::pdf_document2:
+    keep_tex: no
+    fig_caption: yes
+    latex_engine: pdflatex
+csl: ../apa.csl
+geometry: margin=1in
+bibliography: ../library.bib
+email: pa.henaff@gmail.com
+fontfamily: mathpazo
+fontsize: 11pt
+header-includes:
+  - \linespread{1.05}
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{pgfplots}
+  - \usepackage{tikz}
+  - \usetikzlibrary{shapes}
+  - \usetikzlibrary{external}
+  - \usepgfplotslibrary{external}
+  - \usepackage[ruled, vlined, linesnumbered]{algorithm2e}
+  - \usepackage[utf8]{inputenc}
+---
+
+```{r folder-tools, include=TRUE, echo=FALSE}
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+```
+
+```{r setup-utils, include=FALSE}
+source(file.path(get.src.folder(), 'OptionUtils.R'))
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+```{r, warning=FALSE, message=FALSE}
+library(lubridate)
+library(fExoticOptions)
+library(kableExtra)
+library(ggplot2)
+library(stats)
+library(nleqslv)
+library(reshape)
+```
+
+Dans cet exercice, on teste la méthode Derman-Zou pour ajuster et rendre risque-neutre une distribution empirique. Utiliser l'algorithme contenu dans la note de cours pour calculer les $q_i$.
+
+
+## Construction de la distribution empirique
+
+Sélectionner une série du SBF120 et générer 500 scénarios de rendement moyen sur 3 mois.
+En effectuant un tirage avec remise dans la serie des rendements quotidiens.
+
+- Afficher la distribution empirique.
+
+- Calculer l'espérance de rendement et la volatilité. 
+
+
+## Nouvelle information
+
+Le taux sans risque est 2%. Le spot est $S_0 = 100$.   Incorporer les informations suivantes et observez à chaque fois l'effet sur la distribution ajustée.
+
+1. Le straddle ATM est valorisé avec la volatilité empirique.
+
+2. Le call 110 a une volatilité implicite égale à la volatilité empirique + 1%
+
+3. Le call 85 a une volatilité implicite égale à la volatilité empirique + 0.5%
+
+## Smile
+
+Calculez les volatilité implicites pour les strikes de 80 à 120 et tracer la courbe du smile.
+
