@@ -6,5 +6,5 @@ local({
   repos["R-Forge"] <- "http://R-Forge.R-project.org";
   repos["CRAN"] <- "https://cran.r-project.org"
 
-  options(repos=repos);
+  options(repos=repos, bitmapType="cairo");
 })

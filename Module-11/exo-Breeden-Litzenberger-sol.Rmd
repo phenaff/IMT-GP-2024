@@ -1,0 +1,151 @@
+---
+title: "Finance Quantitative"
+subtitle: |
+  | "Exo: Formule de Breeden-Litzenberger"
+  | Solution
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{float}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+```{r load-libraries, include=FALSE, echo=FALSE}
+library(kableExtra)
+library(lubridate)
+library(BondValuation)
+library(lpSolve)
+library(fOptions)
+get.src.folder <- function() {
+path.expand("../GP/src")
+}
+
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+On se propose de calculer la distribution empirique de $S_T$ à partir de la volatilité implicite des options.
+
+```{r}
+sigma <- .2
+S <- 100
+r <- .0
+b <- 0.0
+T <- 1
+```
+
+La courbe de volatilité est donnée par un polynome du second degré. La volatilité de "Black-Scholes" est la volatilité à l'argent, réputée indépendante du strike.
+
+```{r, echo=TRUE}
+## quadratic smile coefficients
+a1 <- -.80/10
+a2 <- 1/10 
+
+## BS volatility function
+bsVol <- function(K) {
+  rep(sigma, length(K))
+}
+
+## Volatility with smile
+smileVol <- function(K) {
+  sigma + a1*log(K/S) + a2*log(K/S)^2
+}
+```
+
+## Densité de $S_T$
+
+Calculer la densité $p(S_T)$ en utilisant la formule de Breeden-Litzenberger.
+
+On calcule la dérivée seconde par différence finie, et on normalise les probabilités 
+discrètes obtenues.
+
+```{r}
+d2CdK2 <- function(vol, S, K, T, r, b) {
+ dK <- 1.e-4
+ c <- GBSOption('c', S, K, T, r, b, vol(K))@price
+ cPlus <- GBSOption('c', S, K+dK, T, r, b, vol(K+dK))@price
+ cMinus <- GBSOption('c', S, K-dK, T, r, b, vol(K-dK))@price
+ (cPlus-2*c+cMinus)/(dK^2)
+}
+
+Ret <- seq(-.95, 1.00, length.out=100)
+KRange <- S*exp(Ret*T)
+nb <- length(KRange)
+p <- matrix(nrow=nb, ncol=2)
+
+i <- 1
+for(K in KRange) {
+  p[i,1] <- d2CdK2(bsVol, S, K, T, r, b) * exp(r*T)
+  p[i,2] <- d2CdK2(smileVol, S, K, T, r, b) * exp(r*T)
+  i<- i+1
+}
+p[,1] = p[,1] / sum(p[,1])
+p[,2] = p[,2] / sum(p[,2])
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(log(KRange/S), smileVol(KRange), xlab='log(K/S)', ylab='volatility', type='l', col='blue',
+     lwd=2) 
+lines(log(KRange/S), bsVol(KRange), type='l', col='green', lwd=2)
+
+plot(log(KRange/S), p[,2], type='l', xlab='log(K/S)', ylab='p(K)', col='blue', ylim=c(0, max(p)))
+lines(log(KRange/S), y=p[,1], type='l', lwd=2, col='green')
+legend('topright', c("Smile", "Constant"), lty=c(1,1), col=c('blue', 'green'), bty="n")
+par(mfrow=c(1,1))
+```
+
+## Valorisation de call digitaux strike=105
+
+On procède par intégration numérique de la fonction de densité.
+
+```{r}
+bs.pdf <- function(K) {
+  d2CdK2(bsVol, S, K, T, r, b) * exp(r*T)
+}
+
+smile.pdf <- function(K) {
+  d2CdK2(smileVol, S, K, T, r, b) * exp(r*T)
+}
+
+K <- 105
+d2 <- (log(S/K) + (r-sigma**2/2)*T)/(sigma*sqrt(T))
+C.digital.bs <- exp(-r*T) * pnorm(d2)
+
+smile.sigma <- smileVol(K)
+d2 <- (log(S/K) + (r-smile.sigma**2/2)*T)/(smile.sigma*sqrt(T))
+C.digital.smile <- exp(-r*T) * pnorm(d2)
+
+# verify integration
+Fwd.BS <- exp(-r*T) * integrate(Vectorize(bs.pdf), lower=10, upper=500, subdivisions = 5000,
+                                rel.tol=1.e-2, abs.tol=1.e-3)$value
+
+Call.BS <- exp(-r*T) * integrate(Vectorize(bs.pdf), lower=K, upper=500, subdivisions = 5000,
+                                 rel.tol=1.e-2, abs.tol=1.e-3)$value
+Call.Smile <- exp(-r*T) * integrate(Vectorize(smile.pdf), lower=K, upper=500, subdivisions = 5000,
+                                    rel.tol=1.e-2, abs.tol=1.e-3)$value
+
+
+
+print(paste("K: ", K, 
+"Prix (vol BS): ", round(Call.BS,3), "Prix (smile): ", round(Call.Smile,3)))
+```

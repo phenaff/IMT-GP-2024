@@ -1,0 +1,244 @@
+---
+title: "Quantitative Finance"
+subtitle: |
+  | "Exo: Pricing under Historical Distributions"
+  | Solution
+author: "Patrick Hénaff"
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+
+output:
+  bookdown::pdf_document2:
+    keep_tex: no
+    fig_caption: yes
+    latex_engine: pdflatex
+csl: ../apa.csl
+geometry: margin=1in
+bibliography: ../library.bib
+email: pa.henaff@gmail.com
+fontfamily: mathpazo
+fontsize: 11pt
+header-includes:
+  - \linespread{1.05}
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{pgfplots}
+  - \usepackage{tikz}
+  - \usetikzlibrary{shapes}
+  - \usetikzlibrary{external}
+  - \usepgfplotslibrary{external}
+  - \usepackage[ruled, vlined, linesnumbered]{algorithm2e}
+  - \usepackage[utf8]{inputenc}
+---
+
+```{r folder-tools, include=TRUE, echo=FALSE}
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+```
+
+```{r setup-utils, include=FALSE}
+source(file.path(get.src.folder(), 'OptionUtils.R'))
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+```{r, warning=FALSE, message=FALSE}
+library(lubridate)
+library(fExoticOptions)
+library(kableExtra)
+library(ggplot2)
+library(stats)
+library(nleqslv)
+library(reshape)
+```
+
+Dans cet exercice, on teste la méthode Derman-Zou pour ajuster et rendre risque-neutre une distribution empirique. Utiliser l'algorithme contenu dans la note de cours pour calculer les $q_i$.
+
+
+## Construction de la distribution empirique
+
+Sélectionner une série du SBF120 et générer 500 scénarios de rendement moyen sur 3 mois.
+En effectuant un tirage avec remise dans la serie des rendements quotidiens.
+
+
+```{r, echo=TRUE}
+ts.zc <- get.ts(folder="SBF120", ticker="zc.pa")
+nb.samples <- 500
+nb.days <- 22*3
+boot.samples <- matrix(sample(ts.zc, size=nb.samples*nb.days, replace=TRUE), nb.samples, nb.days)
+period.means <- apply(boot.samples,1,sum)
+```
+
+Calcul d'une densité lissée à partir de l'échantillon, et interpolée à intervalles réguliers. Une répartition régulière des points rendra plus robuste les calculs d'espérance de produits dérivés:
+
+```{r}
+adj = 1
+eps <- .2 * diff(range(period.means))
+dens <- density(period.means, adjust = adj, from=min(period.means)-eps, to=max(period.means)+eps,
+                n=500)
+dens <- data.frame(x=dens$x, y=dens$y)
+```
+
+
+```{r fig-1, echo=FALSE, fig.width=10, fig.cap="Historical monthly return - Zodiac Aerospace"}
+ggplot(data=data.frame(x=period.means), aes(x)) + 
+    geom_density(adjust=adj, colour="blue", alpha=0.7) +
+    geom_line(data=dens, aes(x=x, y=cumsum(y)/sum(y)), linewidth=0.7, colour='grey30') +
+    stat_ecdf(colour="red", linewidth=0.6, alpha=0.6) +
+    theme_classic() + xlab("period return")
+```
+
+
+Le rendement moyen annualisé est`r round(mean(period.means)*(12/3)*100,1)` %, et la volatilité `r round(sd(period.means)*sqrt(12/3)*100,1)` %. 
+
+
+## Nouvelle information
+
+Le taux sans risque est 2%. Le spot est $S_0 = 100$.   Incorporer les informations suivantes et observez à chaque fois l'effet sur la distribution ajustée.
+
+1. Le straddle ATM est valorisé avec la volatilité empirique.
+
+2. Le call 110 a une volatilité implicite égale à la volatilité empirique + 1%
+
+3. Le put 85 a une volatilité implicite égale à la volatilité empirique + 0.5%
+
+## Smile
+
+Calculez les volatilité implicites pour les strikes de 80 à 120 et tracer la courbe du smile.
+
+
+## Solution
+
+
+On calcule le prix de marché du straddle ATM:
+
+```{r}
+S.0 <- 100
+K <- 100
+TTM = 3/12
+r = .02
+sigma.histo = sd(period.means) * sqrt(12/3)
+riskfree.df <- exp(-r*TTM)
+s <- CRRBinomialTreeOption(TypeFlag="ce", S=S.0, X=K, Time=TTM, r=r,
+                             b=r, sigma=sigma.histo, n=200)@price +
+     CRRBinomialTreeOption(TypeFlag="pe", S=S.0, X=K, Time=TTM, r=r,
+                             b=r, sigma=sigma.histo, n=200)@price
+```
+
+La matrice A est à ce stade composée de deux lignes: une ligne pour contraindre l'espérance de rendement, et une pour contrainte le prix du straddle.
+
+```{r}
+S.T <- S.0 * exp(dens$x)
+p = dens$y / sum(dens$y)
+A <- matrix(c(S.T, abs(S.T-K)) * riskfree.df, nrow=2, byrow=TRUE)
+b <- c(S.0, s)
+```
+
+Solution pour $\lambda_j$ et $q_i$:
+
+```{r}
+obj.func <- function(l) {
+lambda <- matrix(l, nrow=1)
+n.1 <- exp(-lambda %*% A)
+denom = sum(p*n.1)
+pn <- as.vector(p*n.1)
+
+num = rowSums(sweep(A, MARGIN=2, pn, "*"))
+
+err <- b - num / denom
+err
+}
+
+sol <- nleqslv(c(1,1), obj.func)
+lambda <- matrix(sol$x, nrow=1)
+
+n.1 <- exp(-lambda %*% A)
+denom <- sum(p*n.1)
+q = p*n.1 / denom
+
+df <- data.frame(x=dens$x, p=p, q=as.vector(q))
+```
+
+La figure \@ref(fig:atm-straddle) compare la distribution *a-priori* $p_i$ et la distribution *a-posteriori* $q_i$. La loi normale de même variance est aussi représentée.
+
+```{r atm-straddle, echo = FALSE, message=FALSE, fig.align='center', fig.cap='Adjusted densities calibrated to the risk-free rate and to the ATM straddle.', out.width='0.7\\linewidth'}
+sd = sqrt(sum(df$q * (df$x-(r*TTM))^2))
+int.size <- diff(df$x[1:2])
+normal.den <- data.frame(x=df$x, n.dist=dnorm(df$x, mean=r*TTM, sd=sd)*int.size)
+ymax = max(c(df$p, df$q, normal.den$n.dist))
+ymin = 0
+colors <- c("red", "blue", "black")
+plot(df$x, df$p, type="l", col=colors[1], xlab="monthly return", ylab="density",
+     ylim=c(0, 1.1*ymax), lwd=2)
+lines(df$x, df$q, type="l", col=colors[2], lwd=2)
+lines(normal.den$x, normal.den$n.dist, type="l", col=colors[3], lwd=2)
+legend("topright", legend=c("Prior", "Adjusted", "Normal"), col=colors, lty=c(3,3,1), bty="n")
+
+```
+
+## Call 110 (+1 vol) et 85 (+.5 vol)
+
+```{r}
+C.110 <- CRRBinomialTreeOption(TypeFlag="ce", S=S.0, X=110, Time=TTM, r=r,
+                             b=r, sigma=sigma.histo+.01, n=200)@price
+P.85 <- CRRBinomialTreeOption(TypeFlag="pe", S=S.0, X=85, Time=TTM, r=r,
+                             b=r, sigma=sigma.histo+0.005, n=200)@price
+
+A.2 <- matrix(c(pmax(S.T-110,0), pmax(-S.T+85,0))*riskfree.df,nrow=2, byrow=TRUE)
+b.2 <- c(C.110, P.85)
+A <- rbind(A, A.2)
+b <- c(b, b.2)
+
+sol <- nleqslv(rep(.1,4), obj.func)
+lambda <- matrix(sol$x, nrow=1)
+
+n.1 <- exp(-lambda %*% A)
+denom <- sum(p*n.1)
+q = p*n.1 / denom
+
+df <- data.frame(x=dens$x, p=p, q=as.vector(q))
+```
+
+La figure \@ref(fig:atm-straddle-2) montre la nouvelle distribution $q_i$. 
+
+```{r atm-straddle-2, echo = FALSE, message=FALSE, fig.align='center', fig.cap='Adjusted densities calibrated to the risk-free rate, ATM straddle and smile.', out.width='0.7\\linewidth'}
+sd = sqrt(sum(df$q * (df$x-(r*TTM))^2))
+int.size <- diff(df$x[1:2])
+normal.den <- data.frame(x=df$x, n.dist=dnorm(df$x, mean=r*TTM, sd=sd)*int.size)
+ymax = max(c(df$p, df$q, normal.den$n.dist))
+ymin = 0
+colors <- c("red", "blue", "black")
+plot(df$x, df$p, type="l", col=colors[1], xlab="return", ylab="density",
+     ylim=c(0, 1.1*ymax), lwd=2)
+lines(df$x, df$q, type="l", col=colors[2], lwd=2)
+lines(normal.den$x, normal.den$n.dist, type="l", col=colors[3], lwd=2)
+legend("topright", legend=c("Prior", "Adjusted", "Normal"), col=colors, lty=rep(1,3), bty="n")
+
+```
+
+
+## Calcul du smile de volatilité
+
+La volatilité fonction du strike est représentée dans la figure 
+\@ref(fig:smile).
+
+```{r}
+KK <- seq(from=90, to=110, by=2)
+c.vol <- vector(mode="numeric", length=length(KK))
+
+for(i in seq_along(KK)) {
+  K <- KK[i]
+  c.price = sum(df$q * pmax(S.T-K, 0)) * exp(-r*TTM)
+  c.vol[i] = GBSVolatility(price=c.price, TypeFlag="c", S=S.0, X=K, Time=TTM, r=r,
+                           b=r)
+}
+```
+
+```{r smile, echo=FALSE, fig.cap="Implied volatility from the adjusted empirical density", out.width="0.7\\linewidth"}
+plot(KK, c.vol*100, type="l", col="red", xlab="Strike", lwd=2,ylab="Implied volatility", bty="n")
+abline(h=sigma.histo*100, col="blue")
+text(x=95, y=sigma.histo*100+.1, "ATM volatility")
+```
+

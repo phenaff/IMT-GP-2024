@@ -80,7 +80,7 @@ Tout au long du cours, des vidéo-conférences pourront être programmées pour 
 
 # Evaluation
 
-Formez des groupes de 3 étudiants. Chaque groupe choisit de rendre 3 TPs parmi les 4 TPs proposés, chaque TP comptant pour 1/3 de la note, qui sera commune à tous les membres du groupe. Vous avez donc le choix entre le TP sur les options sur actions et indices et le TP sur les options de taux, et vous devez rendre obligatoirement le TP "gestion de portefeuille" et le TP "méthodes de Monte-Carlo".
+Formez des groupes de 3 étudiants. Chaque groupe choisit de rendre 3 TPs parmi les 4 TPs proposés, chaque TP comptant pour 1/3 de la note, qui sera commune à tous les membres du groupe. Vous avez donc le choix entre le TP sur les options sur actions et indices et le TP sur la gestion obligataire, et vous devez rendre obligatoirement le TP "gestion de portefeuille" et le TP "méthodes de Monte-Carlo".
 
 \importantbox{
 Les TP sont à réaliser en notebook "Rmarkdown" [@Xie2019] et à rendre au format \texttt{.pdf}. Vous rendrez également le code source \texttt{.Rmd}.
