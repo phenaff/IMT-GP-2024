@@ -1,0 +1,181 @@
+---
+title: "Finance Quantitative"
+subtitle: "Exercice Vanna-Volga"
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{eurosym}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load-libraries, include=FALSE, echo=TRUE}
+library(fOptions)
+```
+
+Dans cet exercice, on va construire les instruments de référence traditionnels de la méthode Vanna-Volga, et tenter de justifier le choix faits par les praticiens, en particulier sur le marché des changes.
+
+# Les données de marché
+
+```{r, echo=TRUE}
+  T <- 1
+  S.0 <- 100
+  r <- 0
+  d <- 0
+  b <- r-d
+  sigma <- 30/100
+  X <- 110.50
+```
+
+On dispose d'une fonction qui permet de déterminer le smile et fonction du strike:
+
+```{r, echo=TRUE}
+  # smile function
+  smile <- function(X) (-(0/20)*(X-S.0) + (1/300)*(X-S.0)^2)/100
+```
+
+
+```{r, echo=TRUE}
+KRange <- seq(40, 200, by=2)
+vol.smile <- sapply(KRange, smile)
+plot(KRange, vol.smile, type="l", col="red", lwd=2, xlab="K")
+```
+
+## Test
+
+```{r, echo=TRUE}
+# Call avec smile de volatilité
+call <- function(K, sigma) {
+  tmp <- GBSOption(TypeFlag="c", S.0, X=K,Time=T,
+                   r=r, b=b, sigma)
+  tmp@price
+}
+# test
+print(paste("Call 90: ", round(call(90, sigma),3)))
+```
+
+# Les instruments de référence
+  
+On se propose de calculer les charactéristiques des trois instruments de référence:
+
+- un straddle à l'argent
+- un risk-reversal à 25 $\Delta$ en valeur absolue
+- un butterfly vega-neutre.
+
+## Straddle
+
+Par définition, le Straddle est valorisé à la volatilité BS.
+Ecrire une fonction qui calcule la valeur du straddle en fonction du sous-jacent et de la volatilité.
+
+```{r}
+C.1 <- function(S, sigma) {
+  GBSOption(TypeFlag="c", S, X=S.0,Time=T,
+                   r=r, b=b, sigma)@price +
+          GBSOption(TypeFlag="p", S, X=S.0,Time=T,
+                   r=r, b=b, sigma)@price
+}
+```
+
+## Risk reversal
+
+- Calculer le strike d'un call et d'un put ayant un $\Delta$ de .25 en valeur absolue.
+- Ecrire une fonction qui calcule la valeur du risk-reversal en fonction du sous-jacent et de la volatilité.
+
+```{r}
+
+call.delta <- function(K) {
+  dS = .1
+  (GBSOption(TypeFlag="c", S.0+dS, X=K,Time=T,
+                   r=r, b=b, sigma)@price -
+          GBSOption(TypeFlag="c", S.0-dS, X=K,Time=T,
+                   r=r, b=b, sigma)@price) / (2*dS)
+}
+
+put.delta <- function(K) {
+  dS = .1
+  (GBSOption(TypeFlag="p", S.0+dS, X=K,Time=T,
+                   r=r, b=b, sigma)@price -
+          GBSOption(TypeFlag="p", S.0-dS, X=K,Time=T,
+                   r=r, b=b, sigma)@price) / (2*dS)
+}
+
+call.delta.error <- function(K) {
+  0.25 - call.delta(K)
+}
+
+put.delta.error <- function(K) {
+  0.25 + put.delta(K)
+}
+
+K2 <- uniroot(call.delta.error, c(50, 150))$root
+K1 <- uniroot(put.delta.error, c(50, 150))$root
+
+C2 <- function(S, sigma) {
+  (GBSOption(TypeFlag="p", S, X=K1,Time=T,
+                   r=r, b=b, sigma)@price -
+          GBSOption(TypeFlag="c", S, X=K2,Time=T,
+                   r=r, b=b, sigma)@price)
+}
+```
+
+## Butterfly
+
+Le butterfly est un portefeuille d'options:
+
+$$
+\beta (C(S_0, \sigma) + P(S_0, \sigma)) - S(S_0, \sigma)
+$$
+avec: $C$: call .25 $\Delta$, $P$: put .25 $\Delta$, $S$: ATM straddle.
+
+- Calculer $\beta$ pour être vega-neutre
+- Ecrire une fonction qui calcule la valeur du butterfly en fonction du sous-jacent et de la volatilité.
+
+```{r}
+C.3 <- function(S, sigma, beta) {
+  beta * ( 
+  GBSOption(TypeFlag="p", S, X=K1,Time=T,
+                   r=r, b=b, sigma)@price +
+          GBSOption(TypeFlag="c", S, X=K2,Time=T,
+                   r=r, b=b, sigma)@price)
+  - C.1(S, sigma)
+}
+```
+
+```{r}
+Vega <- function(f, S, sigma) {
+  dSigma = .1/100
+  (f(S, sigma+dSigma) - f(S, sigma-dSigma))/ (2*dSigma)
+}
+
+vega.error <- function(beta) {
+dSigma = .1/100  
+(C.3(S.0, sigma+dSigma, beta) -  C.3(S.0, sigma-dSigma, beta)) / (2*dSigma)
+  }
+
+beta <- uniroot(vega.error, interval=c(.1, 3))
+```
+
+
+## Indicateurs de risque
+
+Calculez les indicateurs de risque vega, vanna, volga pour ces trois instruments:
+
+- Vega: $\partial P / \partial \sigma$
+
+- Vanna: $\partial Vega / \partial S$
+
+- Volga: $\partial Vega / \partial sigma$
+
+Construire la matrice des indicateurs ci-dessus pour les trois instruments de couverture (Straddle, Risk Riversal, Butterfly) et observer la structure de la matrice. Montrer comment cette structure permet 
+un calcul approximatif de la couverture VV.
+
