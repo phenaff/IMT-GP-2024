@@ -37,6 +37,7 @@ library(Hmisc)
 library(nFactors)
 library(kableExtra)
 library(quadprog)
+library(corpcor)
 
 get.src.folder <- function() {
   path.expand("../GP/src")
@@ -192,3 +193,26 @@ kable(tmp, "latex", booktabs=T, digits=2, caption="Solution Numérique Variance 
 kable_styling(latex_options="HOLD_position")
 ```
 
+## Test with rank deficient matrix
+
+We cancel the last 3 eigenvalues of the covariance matrix
+
+```{r, echo=TRUE}
+s <- svd(cov.all)
+ev <- s$d
+ev[9:11] = 0
+cov.low.rank <- s$u %*% diag(ev) %*% t(s$v)
+
+cov.shrink <- cov.shrink(cov.low.rank)
+n <- ncol(daily.ret)
+dvec <- rep(0, n)
+Amat <- matrix(1, nrow=n, ncol=1)
+bvec <- 1
+sol <- solve.QP(cov.shrink, dvec, Amat, bvec, meq=1)
+```
+
+```{r solution-low-rank, echo=FALSE}
+tmp <- data.frame(weight=100*sol$solution, row.names=names(daily.ret))
+kable(tmp, "latex", booktabs=T, digits=2, caption="Solution Variance Minimale (\\%)") %>%
+kable_styling(latex_options="HOLD_position")
+```
