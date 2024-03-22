@@ -1,0 +1,699 @@
+---
+title: "Finance Quantitative"
+subtitle: |
+  | TP 1
+  | Optimisation de Portefeuille
+  | Solution
+author: Patrick Hénaff
+date: "Version: `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    keep_tex: false
+    fig_caption: yes
+    latex_engine: pdflatex
+    extra_dependencies: ["float"]
+geometry: margin=1in
+
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.pos = "h", out.extra = "", warning=FALSE, message=FALSE)
+options(knitr.kable.NA = '')
+```
+
+```{r load-libraries, include=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+library(xts)
+library(hornpa)
+library(lubridate)
+library(xtable)
+library(quantmod)
+library(PerformanceAnalytics)
+library(TTR)
+library(lubridate)
+library(roll)
+library(Hmisc)
+library(nFactors)
+library(kableExtra)
+library(broom)
+library(BLCOP)
+library(fPortfolio)
+library(quadprog)
+library(FFdownload)
+library(timeSeries)
+library(corpcor)
+library(quadprog)
+```
+
+```{r init, include=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+get.src.folder <- function() {
+  path.expand("../GP/src")
+}
+
+get.data.folder <- function() {
+  path.expand("../GP/data")
+}
+
+source(file.path(get.src.folder(), 'utils.R'))
+source(file.path(get.src.folder(), 'FileUtils.R'))
+```
+
+# Modèle de Black-Litterman
+
+
+* Effectuer une lecture attentive de l'article de He et Litterman.
+
+* A partir de la note de cours, reproduire les autres exemples de l'article,
+comparer les résultats avec ceux obtenus avec le package BLCOP.
+
+* Comparer avec une allocation MV classique.
+
+# Données
+
+```{r, echo=FALSE}
+spl <- function (
+  s,      # input string
+  delim = ',' # delimiter
+) {
+  unlist(strsplit(s,delim))
+}
+```
+
+```{r, echo=T}
+ data =
+'1,0.4880,0.4780,0.5150,0.4390,0.5120,0.4910
+ 0.4880,1,0.6640,0.6550,0.3100,0.6080,0.7790
+ 0.4780,0.6640,1,0.8610,0.3550,0.7830,0.6680
+ 0.5150,0.6550,0.8610,1,0.3540,0.7770,0.6530
+ 0.4390,0.3100,0.3550,0.3540,1,0.4050,0.3060
+ 0.5120,0.6080,0.7830,0.7770,0.4050,1,0.6520
+ 0.4910,0.7790,0.6680,0.6530,0.3060,0.6520,1'
+
+  Corrmat = matrix( as.double(spl( gsub('\n', ',', data), ',')),
+                    nrow = length(spl(data, '\n')), byrow=TRUE)
+
+  stdevs = c(16.0, 20.3, 24.8, 27.1, 21.0,  20.0, 18.7)/100
+  w.eq = c(1.6, 2.2, 5.2, 5.5, 11.6, 12.4, 61.5)/100
+  # Prior covariance of returns
+  Sigma = Corrmat * (stdevs %*% t(stdevs))
+```
+
+Calcul des rendements d'équilibre:
+
+```{r, echo=T}
+# risk aversion parameter
+delta = 2.5
+Pi = delta * Sigma %*% w.eq
+```
+
+```{r}
+AssetNames = c('Australia','Canada','France','Germany','Japan','UK','USA')
+Table2 = cbind(AssetNames, round(cbind(stdevs, w.eq, Pi) * 100,1))
+colnames(Table2) = c('Assets','$\\sigma$','$w_{eq}$','$\\Pi$')
+kable(Table2, format='latex', booktabs=T, escape=F,
+      caption="Résumé des données de marché")
+```
+
+# Fonction de calcul des poids optimaux
+
+
+```{r, echo=T}
+bl.weights <- function(P, Q, tau.s, tau.o) {
+# one tau per view
+x = tau.o * diag(P %*% Sigma %*% t(P))
+Omega = diag(x, nrow=length(x))
+tau.Sigma.inv = solve(tau.s*Sigma)
+M.inverse = solve(tau.Sigma.inv + (t(P) %*% solve(Omega) %*% P))
+mu.bar = M.inverse %*% (tau.Sigma.inv %*% Pi + t(P) %*% solve(Omega) %*% Q)
+Sigma.bar = M.inverse + Sigma
+
+w.star = (1/delta) * solve(Sigma.bar) %*% mu.bar
+
+A = (1/tau.s)*Omega + 1/(1+tau.s) * P %*% Sigma %*% t(P)
+APS <- 1/(1+tau.s) * solve(A) %*% P %*% Sigma
+OIQ <- (tau.s/delta) * solve(Omega) %*% Q
+Lambda =  OIQ - APS %*% w.eq - APS %*% t(P) %*% OIQ
+
+Hmisc::llist(mu.bar, w.star, Lambda)
+}
+```
+
+# Point de vue 1: Le marché action Allemand surperforme le reste du marché action Européen de 5% par an.
+
+Portefeuille exprimant le point de vue:
+
+```{r, echo=TRUE, message=FALSE}
+P.1 = matrix(c(0, 0, -29.5, 100, 0, -70.5, 0)/100, nrow=1)
+Q.1 = 5/100
+tau.s = 0.05
+tau.o = 0.05
+
+res <- bl.weights(P.1, Q.1, tau.s, tau.o)
+df = data.frame(100*cbind(t(P.1), res$mu.bar, res$w.star, res$w.star-w.eq/(1+tau.s)))
+df <- rbind(df, c(100*Q.1, rep(NA, 4)))
+df <- rbind(df, c(100*res$Lambda[1], rep(NA, 4)))
+
+row.names(df) = c(AssetNames, 'q', '$\\lambda \\times 100$')
+names(df) =  c('P', "$\\bar{\\mu}$", '$w^*$','$w^* - \\frac{W_{eq}}{1+\\tau}$')
+
+tmp <- kable(df, digits = 1, format="latex", booktabs=T, escape=F,
+      caption="Solution avec PdV 1. P: matrice du PdV, $\\bar{\\mu}$: rendement ex-post,
+      $w^*$: poids optimaux, $\\frac{W_{eq}}{1+\\tau}$: poids ex-ante") %>%
+  kable_styling(latex_options="HOLD_position")
+kableExtra::row_spec(tmp, 7, hline_after = TRUE)
+```
+
+# Point de vue 2: le marché action Canadien surperforme le marché US de 3% par an.
+
+## Solution Litterman & He
+
+Portefeuille exprimant le point de vue:
+
+```{r, echo=TRUE, message=FALSE}
+P.2 = matrix(c(0, 100, 0, 0, 0, 0, -100)/100, nrow=1)
+Q.2 = 3/100
+
+P <- rbind(P.1, P.2)
+Q <- matrix(c(Q.1, Q.2), nrow=2)
+tau.o <- rep(0.05,2)
+res <- bl.weights(P, Q, tau.s, tau.o)
+df = data.frame(100*cbind(t(P), res$mu.bar, res$w.star, res$w.star-w.eq/(1+tau.s)))
+df <- rbind(df, c(100*t(Q), rep(NA, 4)))
+df <- rbind(df, c(t(100*res$Lambda), rep(NA, 4)))
+
+row.names(df) = c(AssetNames, 'q', '$\\lambda \\times 100$')
+names(df) =  c('$P_1$', '$P_2$', "$\\bar{\\mu}$", '$w^*$','$w^* - \\frac{W_{eq}}{1+\\tau}$')
+tmp <- kable(df, digits = 1, format="latex", booktabs=T, escape=F,
+      caption="Solution avec PdV 1 and 2.") %>%
+  kable_styling(latex_options="HOLD_position")
+kableExtra::row_spec(tmp, 7, hline_after = TRUE)
+```
+
+## Solution BLCOP
+
+La solution obtenue en resolvant directement le portefeuille tangent avec les rendements et la matrice de covariance ex-post est globalement en accord avec le résultat de Litterman & He.
+
+```{r, echo=TRUE, message=FALSE}
+# rendement ex-ante
+delta = 2.5
+Pi = delta * Sigma %*% w.eq
+
+# Point de vue
+tau.pdv = 0.05
+
+PDV.1 = matrix(c(0, 0, -29.5, 100, 0, -70.5, 0)/100, nrow=1)
+colnames(PDV.1) <- AssetNames
+# niveau de confiance
+sd <- as.numeric(tau.pdv * PDV.1  %*% Sigma %*% t(PDV.1))
+views <- BLViews(P = PDV.1, q = 0.05,
+                 confidences =  1/sd,
+                 assetNames = AssetNames)
+
+PDV.2 = matrix(c(0, 100, 0, 0, 0, 0, -100)/100, nrow=1)
+colnames(PDV.2) <- AssetNames
+# niveau de confiance
+sd <- as.numeric(tau.pdv * PDV.2  %*% Sigma %*% t(PDV.2))
+views <- addBLViews(PDV.2, q = 0.03,
+                 confidences =  1/sd,
+                 views)
+
+dist.expost <- posteriorEst(views=views, sigma=Sigma, mu=as.vector(Pi), tau=0.05)
+
+mu <- dist.expost@posteriorMean
+S <- dist.expost@posteriorCovar
+res <- solve.QP(Dmat=S, dvec=rep(0, length(mu)), Amat=as.matrix(mu, ncol=1), bvec=1, meq=1)
+w.QP <- round(100*res$solution/sum(res$solution),1)
+df <- data.frame(w=w.QP)
+row.names(df) <- AssetNames
+names(df) <- "$w^*$"
+kable(df, caption = "Portefeuille tangent avec BLCOP et solve.QP, incorporant les PDV 1 et 2",
+      format="latex", booktabs=T, escape=F) %>%
+    kable_styling(latex_options="HOLD_position")
+```
+
+
+# Point de vue 3: Optimiste sur le marché action Canadien
+
+Le seul changement est le paramètre $q_2$:
+
+```{r, echo=TRUE, message=FALSE}
+Q.2 = 4/100
+
+Q <- matrix(c(Q.1, Q.2), nrow=2)
+
+res <- bl.weights(P, Q, tau.s, tau.o)
+df = data.frame(100*cbind(t(P), res$mu.bar, res$w.star, res$w.star-w.eq/(1+tau.s)))
+df <- rbind(df, c(100*t(Q), rep(NA, 4)))
+df <- rbind(df, c(t(100*res$Lambda), rep(NA, 4)))
+
+row.names(df) = c(AssetNames, 'q', '$\\lambda \\times 100$')
+names(df) =  c('$P_1$', '$P_2$', "$\\bar{\\mu}$", '$w^*$','$w^* - \\frac{W_{eq}}{1+\\tau}$')
+tmp <- kable(df, digits = 1, format="latex", booktabs=T, escape=F,
+      caption="Actions Allemandes surperforment de 4\\%") %>%
+  kable_styling(latex_options="HOLD_position")
+kableExtra::row_spec(tmp, 7, hline_after = TRUE)
+```
+
+# Point de vue 4: Moindre confiance dans le PdV "Allemagne vs reste de l'Europe"
+
+L'écart type du rendement du portefeuille 1 double ($\tau = 0.1$):
+
+```{r, echo=TRUE, message=FALSE}
+tau.o <- c(0.1, .05)
+res <- bl.weights(P, Q, tau.s, tau.o)
+df = data.frame(100*cbind(t(P), res$mu.bar, res$w.star, res$w.star-w.eq/(1+tau.s)))
+df <- rbind(df, c(100*t(Q), rep(NA, 4)))
+df <- rbind(df, c(t(100*res$Lambda), rep(NA, 4)))
+
+row.names(df) = c(AssetNames, 'q', '$\\lambda \\times 100$')
+names(df) =  c('$P_1$', '$P_2$', "$\\bar{\\mu}$", '$w^*$','$w^* - \\frac{W_{eq}}{1+\\tau}$')
+tmp <- kable(df, digits = 1, format="latex", booktabs=T, escape=F,
+      caption="Moindre confiance dans le PdV 1.") %>%
+  kable_styling(latex_options="HOLD_position")
+kableExtra::row_spec(tmp, 7, hline_after = TRUE)
+```
+
+# Ajout d'un point de vue redondant.
+
+Le point de vue "Le marché action Canadien surperforme le marché Nippon de 4.12%" est implicite aux points de vue précédents. L'ajout du PdV ne change pas l'allocation.
+
+```{r, echo=TRUE, message=FALSE}
+P.3 = matrix(c(0, 100, 0, 0, -100, 0, 0 )/100, nrow=1)
+Q.3 = 4.12/100
+
+P <- rbind(P.1, P.2, P.3)
+Q <- matrix(c(Q.1, Q.2, Q.3), nrow=3)
+tau.o <- c(0.1, .05, 0.05)
+res <- bl.weights(P, Q, tau.s, tau.o)
+df = data.frame(100*cbind(t(P), res$mu.bar, res$w.star, res$w.star-w.eq/(1+tau.s)))
+df <- rbind(df, c(100*t(Q), rep(NA, 4)))
+df <- rbind(df, c(t(100*res$Lambda), rep(NA, 4)))
+
+row.names(df) = c(AssetNames, 'q', '$\\lambda \\times 100$')
+names(df) =  c('$P_1$', '$P_2$', '$P_3$', "$\\bar{\\mu}$", '$w^*$','$w^* - \\frac{W_{eq}}{1+\\tau}$')
+tmp <- kable(df, digits = 1, format="latex", booktabs=T, escape=F,
+      caption="PdV redondant Canada/Japon.") %>%
+  kable_styling(latex_options="HOLD_position")
+kableExtra::row_spec(tmp, 7, hline_after = TRUE)
+```
+
+# Modèle MV multi-factoriel
+
+Pour remédier à la fragilité d'une matrice de covariance estimée sur des données historiques,
+on se propose d'explorer diverses techniques pour obtenir une estimation plus robuste, et 
+d'observer l'effet de ces estimations sur la solution d'un modèle classique moyenne-variance.
+
+Lire et mettre en oeuvre la méthode "modèles diagonalizables de covariance" décrite par Jacobs, Levy et Markowitz (2005). Résoudre le problème MV et comparer le résultat à celui obtenu avec une estimation directe de la matrice à partir des séries chronologiques.
+
+Solution:
+
+Le rendement des actifs est modélisé à l'aide de facteurs (pas nécésairement orthogonaux):
+
+$$
+R_A = \mu_A + B R_F + U_A
+$$
+
+La variance d'un portefeuille $W_A$ est donc:
+\begin{align}
+V(R_P) &= V(R_A^T W_A) \\
+&= V((\mu_A + B R_F + U_A)^T W_A) \\
+&= W_A^T(F\Sigma_F F^T + D)W_A \\
+&= W_F^T \Sigma_F W_F + W_A^T D W_A
+\end{align}
+avec $W_F = F^T W_A$.
+
+Le portefeuille tangent est la solution du problème:
+
+$$
+\begin{aligned}
+    \mbox{max}\ \  &  \frac{\mu^T w_A - r_0}{\sqrt{w_F^T \Sigma_F w_F + w_A^T D w_A}}  \\
+    \mbox{s.t.} & \\
+    & \mathbf{1}^T w  = 1 \\
+    & F^T w_A -w_F = 0 \\
+    & A w_A \geq b \\
+    & w_A \geq 0
+\end{aligned}
+$$
+
+Ce problème est équivalent à:
+
+$$
+\begin{aligned}
+    \mbox{min}\ \  &  w_F^T \Sigma_F w_F + w_A^T D w_A  \\
+    \mbox{s.t.} & \\
+    & \hat{\mu}^T w_A = 1 \\
+    & F^T w_A -w_F = 0 \\
+    & \hat{A}^T w_A \geq 0 \\
+    & w_A \geq 0
+\end{aligned}
+$$
+
+avec $\hat{A} = [\hat{a}_{ij}], \hat{a}_{ij} = a_{ij} - b_i$ et 
+$\hat{\mu} = \mu_A - r_0$.
+
+## Données
+
+On utilisera les facteurs Fama-French ainsi que des séries de cours des actions du
+NASDAQ.
+
+### Facteurs Fama-French
+
+Les facteurs mensuels du modèle classique à trois facteurs sont disponibles sur
+le site de K. French:
+
+```{r, echo=TRUE}
+FF.file <- file.path(get.data.folder(), "FFdownload.rda")
+if(!file.exists(FF.file)) {
+  tempf <- tempfile(fileext = ".RData")
+  inputlist <- c("F-F_Research_Data_Factors") 
+  FFdownload(output_file = FF.file, inputlist=inputlist)
+}
+load(FF.file)
+
+# Fama-French 3 factors - monthly
+
+ts.FF <- FFdownload$`x_F-F_Research_Data_Factors`$monthly$Temp2["1960-01-01/",
+c("Mkt.RF","SMB","HML")]/100
+ts.FF <- timeSeries(ts.FF, as.Date(time(ts.FF)))
+```
+
+
+```{r, echo=FALSE, fig.cap='Facteurs Fama-French'}
+fig <- as.xts(exp(colCumsums(ts.FF)))
+
+plotFF <- plot(fig[,"Mkt.RF"],main="Market",major.ticks = "years",format.labels="%Y",col="black",lwd=2,lty=1,cex=0.8)
+plotFF <- lines(fig[,"SMB"],on=NA,main="SMB",col="darkgreen",lwd=2,lty=1,ylim=c(0,5),cex=0.8)
+plotFF <- lines(fig[,"HML"],on=NA,main="HML",col="darkred",lwd=2,lty=1,ylim=c(0,15),cex=0.8)
+plotFF
+```
+
+
+### Historique des cours du NASDAQ
+
+```{r, echo=TRUE, warning=FALSE, cache=TRUE}
+folder <- 'NASDAQ'
+tickers <- get.tickers(folder)
+ts.all <- get.all.ts(folder, tickers, dt.start = dmy('01Mar2007'), combine = TRUE)
+# exclusion des titres a trop forte vol
+sigma = colSds(ts.all)
+idx <- which((sigma-mean(sigma)) > 3*sqrt(var(sigma)))
+while(length(idx)>0) {
+ts.all <- ts.all[,-idx]
+sigma = colSds(ts.all)
+idx <- which((sigma-mean(sigma)) > 3*sqrt(var(sigma)))
+}
+```
+
+```{r, echo=FALSE, fig.cap="Rendements quotidiens de titres du NASDAQ"}
+plot(ts.all[,1:3])
+```
+
+### Taux sans risque
+
+Le taux sans risque est obtenu du site de la Banque Féderale.
+
+```{r, echo=TRUE}
+# riskless rate
+file.path <- file.path(get.data.folder(), "DP_LIVE_01032020211755676.csv")
+tmp <- read.csv(file.path, header=TRUE, sep=";")[, c("TIME", "Value")]
+dt <- ymd(paste(tmp$TIME, "-01", sep=""))
+rf_rate <- timeSeries(data=tmp$Value/(100.0*12), dt)
+colnames(rf_rate) <- "Rf"
+```
+
+```{r, echo=FALSE, fig.cap="Taux court-terme mensuel des emprunts d'état"}
+plot(rf_rate)
+```
+
+
+# Modèle Moyenne-Variance avec la covariance historique.
+
+Tous les calculs doivent se faire sur des données mensuelles. 
+
+1. Convertir les séries de rendement quotidiennes en séries mensuelles
+2. Choisir un intervalle de 36 mois et calculer la matrice de covariance. Vérifier 
+que la matrice est positive définite, et effectuer la correction necessaire si besoin.
+3. Calculer le portefeuille tangent.
+
+Que penser de la solution trouvée?
+
+## Solution
+
+Calcul du rendement mensuel. La série de taux sans risque mensuel est alignée avec les séries de rendement des titres.
+
+```{r, echo=TRUE, cache=TRUE}
+ts.all.monthly <- apply.monthly(ts.all[,1], FUN=sum)
+for(i in 2:ncol(ts.all)) {
+  tmp <- apply.monthly(ts.all[,i], FUN=sum)
+  ts.all.monthly <- cbind(ts.all.monthly, tmp)
+}
+tmp <- floor_date(ymd(time(ts.all.monthly)), 'month')
+time(ts.all.monthly) = as.timeDate(tmp)
+ts.all.A <- removeNA(merge(ts.all.monthly, rf_rate))
+asset.cols <- head(colnames(ts.all.A), -1)
+nb.assets <- length(asset.cols)
+```
+
+Selection de l'intervalle de calcul: 3 ans de données mensuelles.
+
+```{r, echo=TRUE}
+nb.obs = 12*3
+dt.start <- dmy("01Aug2009")
+idx.start <- closest.index(ts.all.A, dt.start)
+idx <- seq(idx.start, length.out=nb.obs)
+
+ts.r.A <- ts.all.A[idx, asset.cols]
+riskfree.r <- ts.all.A[idx, "Rf"]
+```
+
+On calcule les termes du programme quadratique, en prenant soin de rendre $\Sigma$ positive définite si nécéssaire.
+
+```{r, echo=TRUE}
+mu.hat <- colMeans(ts.r.A[, asset.cols]) - rep(as.numeric(last(riskfree.r)), nb.assets)
+cov.A = cov(ts.r.A[, asset.cols], method='pearson')    
+
+if(!is.positive.definite(cov.A)) {
+  cov.A <- make.positive.definite(cov.A, 0.0000001)
+}    
+
+
+# w > 0
+A = diag(nb.assets)
+b.0 <- rep(0, nb.assets)
+
+# \mu^T w = 1
+A <- cbind(mu.hat, A)
+b.0 <- c(1, b.0)
+
+sol = solve.QP(Dmat = cov.A, dvec = rep(0, nrow(cov.A)) , 
+                      Amat=A, bvec=b.0, meq=1)
+```
+
+On ne garde que les poids significativement positifs.
+
+```{r, echo=TRUE}
+w.tol <- 2.5/100
+w = sol$solution / sum(sol$solution)
+w[w < w.tol] = 0
+w = w/sum(w)
+names(w) = asset.cols
+nb.assets <- length(asset.cols)
+w <- as.matrix(w, ncol=1)
+risk <- round(100*sqrt(t(w) %*% cov.A %*% w),2)
+```
+
+```{r, echo=FALSE, fig.cap="Portefeuille Tangent (covariance historique)"}
+barplot(100*t(w),las = 2)
+legend("top", as.expression(bquote(sigma *"="* .(risk))))
+```
+
+On observe que le portefeuille est concentré sur un petit nombre de titres.
+
+
+# Modèle Moyenne-Variance avec des facteurs statistiques
+
+On se propose d'utiliser des facteurs issus d'une ACP pour modéliser la covariance
+entre les titres. En pratique, on utilisera le modèle "Diagonizable Model of Covariance" décrit par Jacobs, Levy & Markowitz (2005). 
+
+Avec les données selectionnées précédement,
+
+1. Calculer une ACP et identifier les facteurs qui semblent significatifs.
+2. Construire les séries chronologiques $R_F(t)$.
+3. Calculer la matrice $B$ en estimant par regression les coefficients $\beta_{ik}$ de
+l'équation
+$$
+R_i(t) = \mu_i + \sum_k \beta_{ik} R_{F_k}(t) + U_i(t)
+$$
+4. Calculer les matrices de covariance des facteurs et des termes d'erreur.
+5. Formuler et résoudre le programme quadratique dont la solution est le portefeuille tangent.
+
+Comparer cette solution à la solution précédente.
+
+## Solution
+
+Calcul des composantes principales et regression des rendements sur les facteurs.
+
+```{r, echo=TRUE}
+res.pca <- prcomp(ts.r.A[, asset.cols], scale=TRUE)
+nb.factors <- 3
+# Rendement des facteurs: rotation des séries initiales
+f.ret <- timeSeries(data=res.pca$x[,1:nb.factors], time(ts.r.A))
+
+# Calcul des \beta
+
+w = lapply(seq_len(nb.assets),function(i) {lm(ts.r.A[,i] ~ f.ret)})
+
+beta <- matrix(0, ncol=ncol(f.ret), nrow=nb.assets)
+alpha <- rep(0, nb.assets)
+cov.U.ACP <- rep(0, nb.assets)
+for(i in seq_len(nb.assets)) {
+  beta[i,] = tail(w[[i]]$coefficients,-1)
+  alpha[i] = w[[i]]$coefficients[1]
+  cov.U.ACP[i] = var(w[[i]]$residuals)
+}
+
+cov.diag = c(cov.U.ACP, colVars(f.ret))
+cov.FM = diag(cov.diag)
+```
+
+On peut maintenant former le programme quadratique
+
+```{r, echo=TRUE}
+A <- rbind(beta, -diag(nb.factors))
+A <- cbind(A, c(mu.hat, rep(0, nb.factors)))
+b.0 <- c(rep(0, nb.factors), 1)
+sol <- solve.QP(Dmat=cov.FM, dvec=rep(0, nrow(cov.FM)), Amat=A, bvec=b.0, meq=ncol(A))
+```
+
+```{r, echo=TRUE}
+w.tol <- 2.5/100
+w <- head(sol$solution, nb.assets)
+w = w/sum(w)
+w[w < w.tol] = 0
+w = w/sum(w)
+names(w) = asset.cols
+nb.assets <- length(asset.cols)
+w <- as.matrix(w, ncol=1)
+risk <- round(100*sqrt(t(w) %*% cov.A %*% w),2)
+```
+
+```{r, echo=FALSE, fig.cap="Portefeuille Tangent (covariance selon facteurs ACP). L'allocation est beaucoup plus diversifiée qu'en utilisant la covariance historique"}
+barplot(100*t(w),las = 2)
+legend("top", as.expression(bquote(sigma *"="* .(risk))))
+```
+A titre de curiosité, on compare ci-dessous l'évolution d'AAPL et du premier facteur issu de l'ACP. Sans surprise, une entreprise à très forte capitalisation telle que AAPL suit globalement  l'indice de marché.
+
+```{r, echo=FALSE, fig.cap="Rendement du facteur 1 et d'AAPL"}
+f.ret.ACP <- -f.ret
+plot(f.ret.ACP[,1]/colSds(f.ret.ACP[,1]), col='blue')
+lines(ts.r.A[,"aapl"]/colSds(ts.r.A[,"aapl"]), col='red')
+legend("topright", legend=c("Facteur 1 (ACP)", "AAPL"), col=c("blue", "red"), lty=c(1,1))
+```
+
+
+# Modèle Moyenne-Variance avec les facteurs Fama-French
+
+On procède de la même manière que précédement, en substituant les 3 facteurs Fama-French
+aux facteurs statistiques. Noter que la matrice de covariance des facteurs n'est
+plus diagonale.
+
+## Solution
+
+On aligne les séries de facteurs avec les rendements des titres.
+
+```{r, echo=TRUE}
+tmp <- removeNA(merge(ts.all.monthly, ts.FF))
+ts.merged <- removeNA(merge(tmp, rf_rate))
+```
+
+Selection de l'intervalle de calcul: 3 ans de données mensuelles.
+
+```{r, echo=TRUE}
+nb.obs = 12*3
+dt.start <- dmy("01Aug2009")
+idx.start <- closest.index(ts.all.A, dt.start)
+idx <- seq(idx.start, length.out=nb.obs)
+
+ts.r.A <- ts.merged[idx, asset.cols]
+riskfree.r <- ts.merged[idx, "Rf"]
+f.ret <- ts.merged[idx,colnames(ts.FF)]
+nb.factors = ncol(f.ret)
+```
+
+```{r, echo=TRUE}
+# Calcul des \beta
+
+w = lapply(seq_len(nb.assets),function(i) {lm(ts.r.A[,i] ~ f.ret)})
+
+beta <- matrix(0, ncol=ncol(f.ret), nrow=nb.assets)
+row.names(beta) <- asset.cols
+alpha <- rep(0, nb.assets)
+cov.U.FF <- rep(0, nb.assets)
+names(alpha) = asset.cols
+names(cov.U.FF) <- asset.cols
+for(i in seq_len(nb.assets)) {
+  beta[i,] = tail(w[[i]]$coefficients,-1)
+  alpha[i] = w[[i]]$coefficients[1]
+  cov.U.FF[i] = var(w[[i]]$residuals)
+}
+
+cov.F = cov(f.ret)
+cov.FU.1 <- cbind(diag(cov.U.FF), matrix(0, nrow=nb.assets, ncol=nb.factors))
+cov.FU.2 <- cbind(matrix(0, nrow=nb.factors, ncol=nb.assets), cov.F)
+cov.FU <- rbind(cov.FU.1, cov.FU.2)
+```
+
+On peut maintenant former le programme quadratique
+
+```{r, echo=TRUE}
+A <- rbind(beta, -diag(nb.factors))
+A <- cbind(A, c(mu.hat, rep(0, nb.factors)))
+b.0 <- c(rep(0, nb.factors), 1)
+sol <- solve.QP(Dmat=cov.FU, dvec=rep(0, nrow(cov.FU)), Amat=A, bvec=b.0, meq=ncol(A))
+```
+
+```{r, echo=TRUE}
+w.tol <- 2.5/100
+w = head(sol$solution, nb.assets)
+w = w/sum(w)
+w[w < w.tol] = 0
+w = w/sum(w)
+names(w) = asset.cols
+nb.assets <- length(asset.cols)
+w <- as.matrix(w, ncol=1)
+risk <- round(100*sqrt(t(w) %*% cov.A %*% w),2)
+```
+
+```{r, echo=FALSE, fig.cap="Portefeuille Tangent (covariance selon facteur F-F). On obtient la même diversification qu'avec une matrice de covariance issue de l'ACP"}
+barplot(100*t(w),las = 2)
+legend("top", as.expression(bquote(sigma *"="* .(risk))))
+```
+
+Pour évaluer les mérites respectifs des facteurs issus de l'ACP et des facteurs FF, on représente ci-dessous la correspondance entre les résidus des regressions des rendements sur les deux types de facteurs. Les résultats sont globalement comparables.
+
+```{r, echo=FALSE, fig.cap="Résidus des modèles FF et ACP. Chaque point représent un titre, avec en abscisse le résidu du modèle ACP, et en ordonnée le résidu du modèle FF. On observe une cohérence entre les deux modèles", fig.pos='h'}
+plot(cov.U.ACP, cov.U.FF, xlab="Résidu ACP", ylab="Résidu Fama-French")
+```
+
+
+Comme précédement, on observe que le titre AAPL est globalement cohérent avec les mouvements du premier facteur de FF.
+
+```{r, echo=FALSE, fig.cap="Rendement du facteur Marché de F-F et d'AAPL"}
+plot(ts.r.A[,"aapl"], col='red')
+lines(f.ret[,1], col='blue')
+legend("topright", legend=c("AAPL", "Facteur 1 (F-F)"), col=c("red", "blue"), lty=c(1,1))
+```
+
+Finalement, on note une cohérence remarquable entre le facteur 1 issu de l'ACP et le facteur "marché" de Fama-French.
+
+```{r, echo=FALSE, fig.cap="Facteur 1 statistique et facteur marché de Fama-French"}
+plot(f.ret.ACP[,1]/colSds(f.ret.ACP[,1]), col='blue')
+lines(f.ret[,1]/colSds(f.ret[,1]), col='red')
+legend("topright", legend=c("Facteur 1 ACP", "Facteur 1 F-F"), col=c("red", "blue"), lty=c(1,1))
+```
+
+
